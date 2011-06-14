@@ -20,7 +20,7 @@ Library
   Exposed-Modules:      Network.Sendfile
   Other-Modules:        Network.Sendfile.Types
   Build-Depends:        base >= 4 && < 5, network
-  -- FIXME Need to check
+  -- FIXME tested on FreeBSD only
   if os(freebsd) || os(netbsd) || os(openbsd)
     CPP-Options:   -DOS_BSD
     Other-Modules: Network.Sendfile.BSD
@@ -36,13 +36,8 @@ Library
         Other-Modules: Network.Sendfile.Linux
         Build-Depends: unix
       else
-        if os(windows)
-          CPP-Options:     -DOS_Windows
-          Build-Depends:   Win32
-          Extra-Libraries: mswsock
-          Other-Modules:   Network.Sendfile.Windows
-        else
-          Build-Depends: bytestring
+        Other-Modules: Network.Sendfile.Fallback
+        Build-Depends: bytestring, enumerator
 
 Source-Repository head
   Type:                 git
