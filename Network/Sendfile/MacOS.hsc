@@ -20,7 +20,10 @@ sendfile :: Socket -> FilePath -> FileRange -> IO ()
 sendfile sock path range = bracket
     (openFd path ReadOnly Nothing defaultFileFlags)
     closeFd
-    (\fd -> alloca $ \lenp -> do
+    sendfile'
+  where
+    dst = Fd $ fdSocket sock
+    sendfile' fd = alloca $ \lenp -> do
         case range of
             EntireFile -> do
                 poke lenp 0
@@ -28,9 +31,7 @@ sendfile sock path range = bracket
             PartOfFile off len -> do
                 let off' = fromInteger off
                 poke lenp (fromInteger len)
-                sendPart dst fd off' lenp)
-  where
-    dst = Fd $ fdSocket sock
+                sendPart dst fd off' lenp
 
 sendEntire :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO ()
 sendEntire dst src off lenp = do
@@ -64,4 +65,3 @@ c_sendfile fd s offset lenp = c_sendfile' fd s offset lenp nullPtr 0
 
 foreign import ccall unsafe "sys/uio.h sendfile" c_sendfile'
     :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> Ptr () -> CInt -> IO CInt
-

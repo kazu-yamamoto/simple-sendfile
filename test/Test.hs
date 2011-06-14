@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 {-
   runghc -i.. -DOS_MacOS Test.hs input 100 1000 > output
   cmp input output -i 100:0 -n 1000
@@ -6,8 +8,12 @@
 module Main where
 
 import Control.Concurrent
+import Control.Monad
+import qualified Data.ByteString as BS
+import Data.ByteString.Char8 ()
 import Network.Sendfile
 import Network.Socket
+import qualified Network.Socket.ByteString as SB
 import System.Environment
 import System.IO
 
@@ -16,8 +22,10 @@ main = do
     (file,range) <- parseArgs
     (s1,s2) <- socketPair AF_UNIX Stream 0
     hSetEncoding stdout latin1
-    forkIO $ saver s2
-    sendfile s1 file range
+    forkIO $ do
+        sendfile s1 file range
+        sClose s1
+    saver s2
 
 parseArgs :: IO (FilePath,FileRange)
 parseArgs = do
@@ -29,9 +37,7 @@ parseArgs = do
 
 saver :: Socket -> IO ()
 saver s = do
-    cs <- recv s 4096
-    if cs == ""
-       then return ()
-       else do
-        putStr cs
+    bs <- SB.recv s 4096
+    when (bs /= "") $ do
+        BS.putStr bs
         saver s

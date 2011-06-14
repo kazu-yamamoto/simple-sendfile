@@ -24,6 +24,7 @@ Library
   if os(freebsd) || os(netbsd) || os(openbsd)
     CPP-Options:   -DOS_BSD
     Other-Modules: Network.Sendfile.BSD
+    Build-Depends: unix
   else
     if os(darwin)
       CPP-Options:   -DOS_MacOS
