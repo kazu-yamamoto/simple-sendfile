@@ -16,8 +16,6 @@ import Network.Socket
 import System.Posix.IO
 import System.Posix.Types (Fd(..))
 
-import System.IO
-
 sendfile :: Socket -> FilePath -> FileRange -> IO ()
 sendfile sock path range = bracket
     (openFd path ReadOnly Nothing defaultFileFlags)
@@ -26,16 +24,16 @@ sendfile sock path range = bracket
         case range of
             EntireFile -> do
                 poke lenp 0
-                sendLoop0 dst fd 0 lenp
+                sendEntire dst fd 0 lenp
             PartOfFile off len -> do
                 let off' = fromInteger off
                 poke lenp (fromInteger len)
-                sendLoop dst fd off' lenp)
+                sendPart dst fd off' lenp)
   where
     dst = Fd $ fdSocket sock
 
-sendLoop0 :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO ()
-sendLoop0 dst src off lenp = do
+sendEntire :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO ()
+sendEntire dst src off lenp = do
     do rc <- c_sendfile src dst off lenp
        when (rc /= 0) $ do
            errno <- getErrno
@@ -43,13 +41,12 @@ sendLoop0 dst src off lenp = do
               then do
                   sent <- peek lenp
                   poke lenp 0
-                  hPutStrLn stderr $ show off ++ " " ++ show sent
                   threadWaitWrite dst
-                  sendLoop0 dst src (off + sent) lenp
-              else throwErrno "Network.SendFile.MacOS.sendLoop0"
+                  sendEntire dst src (off + sent) lenp
+              else throwErrno "Network.SendFile.MacOS.sendEntire"
 
-sendLoop :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO ()
-sendLoop dst src off lenp = do
+sendPart :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO ()
+sendPart dst src off lenp = do
     do len <- peek lenp
        rc <- c_sendfile src dst off lenp
        when (rc /= 0) $ do
@@ -58,9 +55,9 @@ sendLoop dst src off lenp = do
               then do
                   sent <- peek lenp
                   poke lenp (len - sent)
-                  sendLoop dst src (off + sent) lenp
                   threadWaitWrite dst
-              else throwErrno "Network.SendFile.MacOS.sendLoop"
+                  sendPart dst src (off + sent) lenp
+              else throwErrno "Network.SendFile.MacOS.sendPart"
 
 c_sendfile :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO CInt
 c_sendfile fd s offset lenp = c_sendfile' fd s offset lenp nullPtr 0
