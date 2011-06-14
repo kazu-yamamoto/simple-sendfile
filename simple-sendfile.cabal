@@ -34,6 +34,7 @@ Library
       if os(linux)
         CPP-Options:   -DOS_Linux
         Other-Modules: Network.Sendfile.Linux
+        Build-Depends: unix
       else
         if os(windows)
           CPP-Options:     -DOS_Windows
