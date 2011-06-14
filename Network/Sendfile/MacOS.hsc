@@ -18,7 +18,8 @@ import System.Posix.Types (Fd(..))
 
 {-|
    Simple binding for sendfile() of MacOS.
-   Used system calls: open(), sendfile(), and close().
+
+   - Used system calls: open(), sendfile(), and close().
 -}
 sendfile :: Socket -> FilePath -> FileRange -> IO ()
 sendfile sock path range = bracket

@@ -21,9 +21,11 @@ import System.Posix.Types (Fd(..))
 {-|
    Simple binding for sendfile() of MacOS.
    Used system calls:
-     EntireFile -- open(), stat(), sendfile(), and close()
-     PartOfFile -- open(), sendfile(), and close()
-   If the size of the file is unknown when sending the entire file,
+
+     - EntireFile -- open(), stat(), sendfile(), and close()
+     - PartOfFile -- open(), sendfile(), and close()
+
+  If the size of the file is unknown when sending the entire file,
    specifying PartOfFile is much faster.
 -}
 sendfile :: Socket -> FilePath -> FileRange -> IO ()

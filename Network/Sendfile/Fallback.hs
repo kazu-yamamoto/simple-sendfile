@@ -13,7 +13,8 @@ import qualified Network.Socket.ByteString as SB
 
 {-|
    Sendfile emulation using enumerator.
-   Used system calls: open(), stat(), read(), send() and close().
+
+   - Used system calls: open(), stat(), read(), send() and close().
 -}
 sendfile :: Socket -> FilePath -> FileRange -> IO ()
 sendfile s fp EntireFile =
