@@ -16,6 +16,10 @@ import Network.Socket
 import System.Posix.IO
 import System.Posix.Types (Fd(..))
 
+{-|
+   Simple binding for sendfile() of MacOS.
+   Used system calls: open(), sendfile(), and close().
+-}
 sendfile :: Socket -> FilePath -> FileRange -> IO ()
 sendfile sock path range = bracket
     (openFd path ReadOnly Nothing defaultFileFlags)

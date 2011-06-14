@@ -18,6 +18,14 @@ import System.Posix.Files
 import System.Posix.IO
 import System.Posix.Types (Fd(..))
 
+{-|
+   Simple binding for sendfile() of MacOS.
+   Used system calls:
+     EntireFile -- open(), stat(), sendfile(), and close()
+     PartOfFile -- open(), sendfile(), and close()
+   If the size of the file is unknown when sending the entire file,
+   specifying PartOfFile is much faster.
+-}
 sendfile :: Socket -> FilePath -> FileRange -> IO ()
 sendfile sock path range = bracket
     (openFd path ReadOnly Nothing defaultFileFlags)
