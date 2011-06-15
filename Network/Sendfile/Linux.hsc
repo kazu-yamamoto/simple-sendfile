@@ -6,7 +6,7 @@ import Control.Applicative
 import Control.Concurrent
 import Control.Exception
 import Control.Monad
-import Data.Int (Int64)
+import Data.Int
 import Data.Word
 import Foreign.C.Error (throwErrno)
 import Foreign.Marshal (alloca)

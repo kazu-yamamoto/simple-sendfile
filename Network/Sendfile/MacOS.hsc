@@ -5,7 +5,7 @@ module Network.Sendfile.MacOS (sendfile) where
 import Control.Concurrent
 import Control.Exception
 import Control.Monad
-import Data.Int (Int64)
+import Data.Int
 import Foreign.C.Error (eAGAIN, eINTR, getErrno, throwErrno)
 import Foreign.C.Types (CInt)
 import Foreign.Marshal (alloca)
