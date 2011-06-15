@@ -19,7 +19,7 @@ import System.Posix.IO
 import System.Posix.Types (Fd(..))
 
 {-|
-   Simple binding for sendfile() of MacOS.
+   Simple binding for sendfile() of Linux.
    Used system calls:
 
      - EntireFile -- open(), stat(), sendfile(), and close()

@@ -16,7 +16,7 @@ import System.Posix.IO
 import System.Posix.Types (Fd(..), COff)
 
 {-|
-   Simple binding for sendfile() of MacOS.
+   Simple binding for sendfile() of BSD.
 
    - Used system calls: open(), sendfile(), and close().
 -}
