@@ -27,7 +27,7 @@ sendfile sock path range hook = bracket
     sendfile'
   where
     dst = Fd $ fdSocket sock
-    sendfile' fd = alloca $ \lenp -> do
+    sendfile' fd = alloca $ \lenp ->
         case range of
             EntireFile -> sendEntire dst fd 0 lenp hook
             PartOfFile off len -> do
@@ -37,31 +37,31 @@ sendfile sock path range hook = bracket
 
 sendEntire :: Fd -> Fd -> COff -> Ptr COff -> IO () -> IO ()
 sendEntire dst src off lenp hook = do
-    do rc <- c_sendfile src dst off 0 lenp
-       when (rc /= 0) $ do
-           errno <- getErrno
-           if errno == eAGAIN || errno == eINTR
-              then do
-                  sent <- peek lenp
-                  hook
-                  threadWaitWrite dst
-                  sendEntire dst src (off + sent) lenp hook
-              else throwErrno "Network.SendFile.BSD.sendEntire"
+    rc <- c_sendfile src dst off 0 lenp
+    when (rc /= 0) $ do
+        errno <- getErrno
+        if errno `elem` [eAGAIN, eINTR]
+            then do
+              sent <- peek lenp
+              hook
+              threadWaitWrite dst
+              sendEntire dst src (off + sent) lenp hook
+            else throwErrno "Network.SendFile.BSD.sendEntire"
 
 sendPart :: Fd -> Fd -> COff -> CSize -> Ptr COff -> IO () -> IO ()
 sendPart dst src off len lenp hook = do
-    do rc <- c_sendfile src dst off len lenp
-       when (rc /= 0) $ do
-           errno <- getErrno
-           if errno == eAGAIN || errno == eINTR
-              then do
-                  sent <- peek lenp
-                  let off' = off + sent
-                      len' = len - fromIntegral sent
-                  hook
-                  threadWaitWrite dst
-                  sendPart dst src off' len' lenp hook
-              else throwErrno "Network.SendFile.BSD.sendPart"
+    rc <- c_sendfile src dst off len lenp
+    when (rc /= 0) $ do
+        errno <- getErrno
+        if errno `elem` [eAGAIN, eINTR]
+            then do
+                sent <- peek lenp
+                let off' = off + sent
+                    len' = len - fromIntegral sent
+                hook
+                threadWaitWrite dst
+                sendPart dst src off' len' lenp hook
+            else throwErrno "Network.SendFile.BSD.sendPart"
 
 c_sendfile :: Fd -> Fd -> COff -> CSize -> Ptr COff -> IO CInt
 c_sendfile fd s offset len lenp = c_sendfile' fd s offset len nullPtr lenp 0

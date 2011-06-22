@@ -29,7 +29,7 @@ sendIter s hook = do
         Nothing -> return ()
         Just bs -> do
             liftIO $ sendLoop s bs (BS.length bs)
-            liftIO $ hook -- FIXME: Is this a right place to call the hook?
+            liftIO hook -- FIXME: Is this a right place to call the hook?
             sendIter s hook
 
 sendLoop :: Socket -> ByteString -> Int -> IO ()
