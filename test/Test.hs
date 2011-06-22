@@ -23,7 +23,7 @@ main = do
     (s1,s2) <- socketPair AF_UNIX Stream 0
     hSetEncoding stdout latin1
     forkIO $ do
-        sendfile s1 file range
+        sendfile s1 file range (return ())
         sClose s1
     saver s2
 
