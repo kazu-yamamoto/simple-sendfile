@@ -16,20 +16,21 @@ import qualified Network.Socket.ByteString as SB
 
    - Used system calls: open(), stat(), read(), send() and close().
 -}
-sendfile :: Socket -> FilePath -> FileRange -> IO ()
-sendfile s fp EntireFile =
-    run_ $ enumFile fp $$ sendIter s
-sendfile s fp (PartOfFile off len) =
-    run_ $ EB.enumFileRange fp (Just off) (Just len) $$ sendIter s
+sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
+sendfile s fp EntireFile hook =
+    run_ $ enumFile fp $$ sendIter s hook
+sendfile s fp (PartOfFile off len) hook =
+    run_ $ EB.enumFileRange fp (Just off) (Just len) $$ sendIter s hook
 
-sendIter :: Socket -> Iteratee ByteString IO ()
-sendIter s = do
+sendIter :: Socket -> IO () -> Iteratee ByteString IO ()
+sendIter s hook = do
     mb <- EL.head
     case mb of
         Nothing -> return ()
         Just bs -> do
             liftIO $ sendLoop s bs (BS.length bs)
-            sendIter s
+            liftIO $ hook -- FIXME: Is this a right place to call the hook?
+            sendIter s hook
 
 sendLoop :: Socket -> ByteString -> Int -> IO ()
 sendLoop s bs len = do

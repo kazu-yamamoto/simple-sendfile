@@ -20,8 +20,8 @@ import System.Posix.Types (Fd(..), COff)
 
    - Used system calls: open(), sendfile(), and close().
 -}
-sendfile :: Socket -> FilePath -> FileRange -> IO ()
-sendfile sock path range = bracket
+sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
+sendfile sock path range hook = bracket
     (openFd path ReadOnly Nothing defaultFileFlags)
     closeFd
     sendfile'
@@ -29,13 +29,13 @@ sendfile sock path range = bracket
     dst = Fd $ fdSocket sock
     sendfile' fd = alloca $ \lenp -> do
         case range of
-            EntireFile -> sendEntire dst fd 0 lenp
+            EntireFile -> sendEntire dst fd 0 lenp hook
             PartOfFile off len -> do
                 let off' = fromInteger off
                     len' = fromInteger len
-                sendPart dst fd off' len' lenp
+                sendPart dst fd off' len' lenp hook
 
-sendEntire :: Fd -> Fd -> COff -> Ptr COff -> IO ()
+sendEntire :: Fd -> Fd -> COff -> Ptr COff -> IO () -> IO ()
 sendEntire dst src off lenp = do
     do rc <- c_sendfile src dst off 0 lenp
        when (rc /= 0) $ do
@@ -43,11 +43,12 @@ sendEntire dst src off lenp = do
            if errno == eAGAIN || errno == eINTR
               then do
                   sent <- peek lenp
+                  hook
                   threadWaitWrite dst
-                  sendEntire dst src (off + sent) lenp
+                  sendEntire dst src (off + sent) lenp hook
               else throwErrno "Network.SendFile.BSD.sendEntire"
 
-sendPart :: Fd -> Fd -> COff -> CSize -> Ptr COff -> IO ()
+sendPart :: Fd -> Fd -> COff -> CSize -> Ptr COff -> IO () -> IO ()
 sendPart dst src off len lenp = do
     do rc <- c_sendfile src dst off len lenp
        when (rc /= 0) $ do
@@ -55,10 +56,11 @@ sendPart dst src off len lenp = do
            if errno == eAGAIN || errno == eINTR
               then do
                   sent <- peek lenp
-                  threadWaitWrite dst
                   let off' = off + sent
                       len' = len - fromIntegral sent
-                  sendPart dst src off' len' lenp
+                  hook
+                  threadWaitWrite dst
+                  sendPart dst src off' len' lenp hook
               else throwErrno "Network.SendFile.BSD.sendPart"
 
 c_sendfile :: Fd -> Fd -> COff -> CSize -> Ptr COff -> IO CInt
