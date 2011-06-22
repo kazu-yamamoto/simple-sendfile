@@ -36,7 +36,7 @@ sendfile sock path range hook = bracket
                 sendPart dst fd off' len' lenp hook
 
 sendEntire :: Fd -> Fd -> COff -> Ptr COff -> IO () -> IO ()
-sendEntire dst src off lenp = do
+sendEntire dst src off lenp hook = do
     do rc <- c_sendfile src dst off 0 lenp
        when (rc /= 0) $ do
            errno <- getErrno
@@ -49,7 +49,7 @@ sendEntire dst src off lenp = do
               else throwErrno "Network.SendFile.BSD.sendEntire"
 
 sendPart :: Fd -> Fd -> COff -> CSize -> Ptr COff -> IO () -> IO ()
-sendPart dst src off len lenp = do
+sendPart dst src off len lenp hook = do
     do rc <- c_sendfile src dst off len lenp
        when (rc /= 0) $ do
            errno <- getErrno
