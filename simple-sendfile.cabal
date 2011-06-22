@@ -37,7 +37,7 @@ Library
         Build-Depends: unix
       else
         Other-Modules: Network.Sendfile.Fallback
-        Build-Depends: bytestring, enumerator
+        Build-Depends: bytestring, enumerator, transformers
 
 Source-Repository head
   Type:                 git
