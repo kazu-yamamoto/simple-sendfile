@@ -18,6 +18,8 @@ import System.Posix.Files
 import System.Posix.IO
 import System.Posix.Types (Fd(..))
 
+#include <sys/sendfile.h>
+
 {-|
    Simple binding for sendfile() of Linux.
    Used system calls:
