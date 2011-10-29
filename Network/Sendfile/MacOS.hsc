@@ -16,6 +16,8 @@ import Network.Socket
 import System.Posix.IO
 import System.Posix.Types (Fd(..))
 
+#include <sys/types.h>
+
 {-|
    Simple binding for sendfile() of MacOS.
 
