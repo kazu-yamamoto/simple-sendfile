@@ -1,4 +1,4 @@
-{-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE CPP, ForeignFunctionInterface #-}
 
 module Network.Sendfile.MacOS (sendfile) where
 
@@ -7,7 +7,11 @@ import Control.Exception
 import Control.Monad
 import Data.Int
 import Foreign.C.Error (eAGAIN, eINTR, getErrno, throwErrno)
+#if __GLASGOW_HASKELL__ >= 703
+import Foreign.C.Types (CInt(CInt))
+#else
 import Foreign.C.Types (CInt)
+#endif
 import Foreign.Marshal (alloca)
 import Foreign.Ptr (Ptr, nullPtr)
 import Foreign.Storable (peek, poke)
@@ -15,6 +19,8 @@ import Network.Sendfile.Types
 import Network.Socket
 import System.Posix.IO
 import System.Posix.Types (Fd(..))
+
+#include <sys/types.h>
 
 {-|
    Simple binding for sendfile() of MacOS.
