@@ -58,14 +58,15 @@ sendfile sock path range hook = bracket
 sendPart :: Fd -> Fd -> Ptr (#type off_t) -> (#type size_t) -> IO () -> IO ()
 sendPart dst src offp len hook = do
     do bytes <- c_sendfile dst src offp len
-       if bytes == -1
-          then throwErrno "Network.SendFile.Linux.sendPart"
-          else do
-              let left = len - fromIntegral bytes
-              when (left /= 0) $ do
-                  hook
-                  threadWaitWrite dst
-                  sendPart dst src offp left hook
+       case bytes of
+           -1 -> throwErrno "Network.SendFile.Linux.sendPart"
+           0  -> return () -- the file is truncated
+           _  -> do
+               let left = len - fromIntegral bytes
+               when (left /= 0) $ do
+                   hook
+                   threadWaitWrite dst
+                   sendPart dst src offp left hook
 
 -- Dst Src in order. take care
 foreign import ccall unsafe "sendfile64" c_sendfile
