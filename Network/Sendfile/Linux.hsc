@@ -5,10 +5,9 @@ module Network.Sendfile.Linux (sendfile) where
 import Control.Applicative
 import Control.Concurrent
 import Control.Exception
-import Control.Monad
 import Data.Int
 import Data.Word
-import Foreign.C.Error (throwErrno)
+import Foreign.C.Error (eAGAIN, getErrno, throwErrno)
 import Foreign.Marshal (alloca)
 import Foreign.Ptr (Ptr)
 import Foreign.Storable (poke)
@@ -59,14 +58,19 @@ sendPart :: Fd -> Fd -> Ptr (#type off_t) -> (#type size_t) -> IO () -> IO ()
 sendPart dst src offp len hook = do
     do bytes <- c_sendfile dst src offp len
        case bytes of
-           -1 -> throwErrno "Network.SendFile.Linux.sendPart"
+           -1 -> do errno <- getErrno
+                    if errno == eAGAIN
+                       then loop len
+                       else throwErrno "Network.SendFile.Linux.sendPart"
            0  -> return () -- the file is truncated
-           _  -> do
-               let left = len - fromIntegral bytes
-               when (left /= 0) $ do
-                   hook
-                   threadWaitWrite dst
-                   sendPart dst src offp left hook
+           _  -> loop (len - fromIntegral bytes)
+  where
+    loop left
+      | left == 0 = return ()
+      | otherwise = do
+          hook
+          threadWaitWrite dst
+          sendPart dst src offp left hook
 
 -- Dst Src in order. take care
 foreign import ccall unsafe "sendfile64" c_sendfile
