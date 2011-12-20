@@ -54,7 +54,7 @@ sendEntire dst src off lenp hook = do
     do rc <- c_sendfile src dst off lenp
        when (rc /= 0) $ do
            errno <- getErrno
-           if errno == eAGAIN || errno == eINTR
+           if errno `elem` [eAGAIN, eINTR]
               then do
                   sent <- peek lenp
                   poke lenp 0
@@ -69,7 +69,7 @@ sendPart dst src off lenp hook = do
        rc <- c_sendfile src dst off lenp
        when (rc /= 0) $ do
            errno <- getErrno
-           if errno == eAGAIN || errno == eINTR
+           if errno `elem` [eAGAIN, eINTR]
               then do
                   sent <- peek lenp
                   poke lenp (len - sent)
