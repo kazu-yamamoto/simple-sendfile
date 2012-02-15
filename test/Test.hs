@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {-
-  runghc -i.. -DOS_MacOS Test.hs input 100 1000 > output
+  runghc -i.. Test.hs input 100 1000 > output
   cmp input output -i 100:0 -n 1000
 -}
 

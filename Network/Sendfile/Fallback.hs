@@ -20,10 +20,11 @@ sendfile s fp (PartOfFile off len) hook =
     runResourceT $ EB.sourceFileRange fp (Just off) (Just len) $$ sinkSocket s hook
 
 sinkSocket :: Socket -> IO () -> Sink ByteString IO ()
-sinkSocket s hook = Sink $ return $ SinkData
-    { sinkPush = \bs -> do
-        liftIO (SB.sendAll s bs)
+sinkSocket s hook =
+    SinkData push close
+  where
+    push bs = do
+        liftIO $ SB.sendAll s bs
         liftIO hook
-        return Processing
-    , sinkClose = return ()
-    }
+        return (Processing push close)
+    close = return ()
