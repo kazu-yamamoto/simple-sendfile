@@ -1,12 +1,9 @@
 module Network.Sendfile.Fallback (sendfile) where
 
-import Control.Monad
 import Control.Monad.IO.Class
 import Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
-import Data.Enumerator
-import Data.Enumerator.Binary as EB
-import Data.Enumerator.List as EL
+import Data.Conduit
+import Data.Conduit.Binary as EB
 import Network.Sendfile.Types
 import Network.Socket
 import qualified Network.Socket.ByteString as SB
@@ -18,21 +15,15 @@ import qualified Network.Socket.ByteString as SB
 -}
 sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
 sendfile s fp EntireFile hook =
-    run_ $ enumFile fp $$ sendIter s hook
+    runResourceT $ sourceFile fp $$ sinkSocket s hook
 sendfile s fp (PartOfFile off len) hook =
-    run_ $ EB.enumFileRange fp (Just off) (Just len) $$ sendIter s hook
+    runResourceT $ EB.sourceFileRange fp (Just off) (Just len) $$ sinkSocket s hook
 
-sendIter :: Socket -> IO () -> Iteratee ByteString IO ()
-sendIter s hook = do
-    mb <- EL.head
-    case mb of
-        Nothing -> return ()
-        Just bs -> do
-            liftIO $ sendLoop s bs (BS.length bs)
-            liftIO hook -- FIXME: Is this a right place to call the hook?
-            sendIter s hook
-
-sendLoop :: Socket -> ByteString -> Int -> IO ()
-sendLoop s bs len = do
-    bytes <- SB.send s bs
-    when (bytes /= len) $ sendLoop s (BS.drop bytes bs) (len - bytes)
+sinkSocket :: Socket -> IO () -> Sink ByteString IO ()
+sinkSocket s hook = Sink $ return $ SinkData
+    { sinkPush = \bs -> do
+        liftIO (SB.sendAll s bs)
+        liftIO hook
+        return Processing
+    , sinkClose = return ()
+    }
