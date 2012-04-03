@@ -1,6 +1,7 @@
 module Network.Sendfile.Fallback (sendfile) where
 
-import Control.Monad.IO.Class
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.IO.Class (liftIO)
 import Data.ByteString (ByteString)
 import Data.Conduit
 import Data.Conduit.Binary as EB
@@ -19,12 +20,13 @@ sendfile s fp EntireFile hook =
 sendfile s fp (PartOfFile off len) hook =
     runResourceT $ EB.sourceFileRange fp (Just off) (Just len) $$ sinkSocket s hook
 
-sinkSocket :: Socket -> IO () -> Sink ByteString IO ()
-sinkSocket s hook =
-    SinkData push close
+sinkSocket :: MonadResource m => Socket -> IO () -> Sink ByteString m ()
+sinkSocket s hook = NeedInput push close
   where
-    push bs = do
-        liftIO $ SB.sendAll s bs
-        liftIO hook
-        return (Processing push close)
-    close = return ()
+    push bs = PipeM a close'
+      where a = do
+                  liftIO (SB.sendAll s bs)
+                  liftIO hook
+                  return (NeedInput push close)
+    close' = return ()
+    close  = lift close'

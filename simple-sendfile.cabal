@@ -1,5 +1,5 @@
 Name:                   simple-sendfile
-Version:                0.2.1
+Version:                0.2.2
 Author:                 Kazu Yamamoto <kazu@iij.ad.jp>
 Maintainer:             Kazu Yamamoto <kazu@iij.ad.jp>
 License:                BSD3
@@ -37,7 +37,9 @@ Library
         Build-Depends: unix
       else
         Other-Modules: Network.Sendfile.Fallback
-        Build-Depends: bytestring, conduit, transformers
+        Build-Depends: bytestring      >= 0.9   && < 0.10
+                     , conduit         >= 0.4   && < 0.5
+                     , transformers    >= 0.2.2 && < 0.4
 
 Source-Repository head
   Type:                 git
