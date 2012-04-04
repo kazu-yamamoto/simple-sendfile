@@ -23,10 +23,11 @@ sendfile s fp (PartOfFile off len) hook =
 sinkSocket :: MonadResource m => Socket -> IO () -> Sink ByteString m ()
 sinkSocket s hook = NeedInput push close
   where
-    push bs = PipeM a close'
-      where a = do
-                  liftIO (SB.sendAll s bs)
-                  liftIO hook
-                  return (NeedInput push close)
+    push bs = PipeM sendAndHook close'
+      where
+        sendAndHook = do
+            liftIO (SB.sendAll s bs)
+            liftIO hook
+            return (NeedInput push close)
     close' = return ()
     close  = lift close'
