@@ -6,7 +6,11 @@
   are the bottleneck of web servers.
 -}
 
-module Network.Sendfile (sendfile, FileRange(..)) where
+module Network.Sendfile (
+    sendfile
+  , sendfileWithHeader
+  , FileRange(..)
+  ) where
 
 import Network.Sendfile.Types
 
