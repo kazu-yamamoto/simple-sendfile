@@ -1,23 +1,34 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 
-module Network.Sendfile.Linux (sendfile) where
+module Network.Sendfile.Linux (
+    sendfile
+  , sendfileWithHeader
+  ) where
 
 import Control.Applicative
-import Control.Concurrent
 import Control.Exception
+import Control.Monad
+import Data.ByteString as B
+import Data.ByteString.Unsafe
 import Data.Int
 import Data.Word
 import Foreign.C.Error (eAGAIN, getErrno, throwErrno)
+import Foreign.C.Types
 import Foreign.Marshal (alloca)
 import Foreign.Ptr (Ptr)
 import Foreign.Storable (poke)
+import GHC.Conc (threadWaitWrite)
 import Network.Sendfile.Types
 import Network.Socket
+import Network.Socket.Internal (throwSocketErrorIfMinus1RetryMayBlock)
 import System.Posix.Files
 import System.Posix.IO
 import System.Posix.Types (Fd(..))
 
 #include <sys/sendfile.h>
+#include <sys/socket.h>
+
+----------------------------------------------------------------
 
 {-|
    Simple binding for sendfile() of Linux.
@@ -76,3 +87,27 @@ sendPart dst src offp len hook = do
 -- Dst Src in order. take care
 foreign import ccall unsafe "sendfile" c_sendfile
     :: Fd -> Fd -> Ptr (#type off_t) -> (#type size_t) -> IO (#type ssize_t)
+
+----------------------------------------------------------------
+
+sendfileWithHeader :: Socket -> [ByteString] -> FilePath -> FileRange -> IO () -> IO ()
+sendfileWithHeader sock hdr path range hook = do
+    -- Copying is much faster than syscall.
+    sendAllMsgMore sock $ B.concat hdr
+    sendfile sock path range hook
+
+sendAllMsgMore :: Socket -> ByteString -> IO ()
+sendAllMsgMore sock bs = do
+    sent <- sendMsgMore sock bs
+    when (sent < B.length bs) $ sendAllMsgMore sock (B.drop sent bs)
+
+sendMsgMore :: Socket -> ByteString -> IO Int
+sendMsgMore (MkSocket s _ _ _ _) xs =
+    unsafeUseAsCStringLen xs $ \(str, len) ->
+    liftM fromIntegral $
+        throwSocketErrorIfMinus1RetryMayBlock "sendMsgMore"
+        (threadWaitWrite (fromIntegral s)) $
+        c_send s str (fromIntegral len) (#const MSG_MORE)
+
+foreign import ccall unsafe "send"
+  c_send :: CInt -> Ptr a -> CSize -> CInt -> IO CInt
