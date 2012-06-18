@@ -9,7 +9,7 @@ import Network.Socket
 import qualified Network.Socket.ByteString as SB
 
 {-|
-   Sendfile emulation using enumerator.
+   Sendfile emulation using conduit.
 
    - Used system calls: open(), stat(), read(), send() and close().
 -}

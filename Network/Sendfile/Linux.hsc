@@ -24,6 +24,7 @@ import System.Posix.Types (Fd(..))
    Used system calls:
 
      - EntireFile -- open(), stat(), sendfile(), and close()
+
      - PartOfFile -- open(), sendfile(), and close()
 
    If the size of the file is unknown when sending the entire file,
