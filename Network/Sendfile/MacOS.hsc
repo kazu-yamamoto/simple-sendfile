@@ -1,10 +1,14 @@
 {-# LANGUAGE CPP, ForeignFunctionInterface #-}
 
-module Network.Sendfile.MacOS (sendfile) where
+module Network.Sendfile.MacOS (
+    sendfile
+  , sendfileWithHeader
+  ) where
 
 import Control.Concurrent
 import Control.Exception
 import Control.Monad
+import Data.ByteString (ByteString)
 import Data.Int
 import Foreign.C.Error (eAGAIN, eINTR, getErrno, throwErrno)
 #if __GLASGOW_HASKELL__ >= 703
@@ -83,3 +87,6 @@ c_sendfile fd s offset lenp = c_sendfile' fd s offset lenp nullPtr 0
 
 foreign import ccall unsafe "sys/uio.h sendfile" c_sendfile'
     :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> Ptr () -> CInt -> IO CInt
+
+sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
+sendfileWithHeader = undefined

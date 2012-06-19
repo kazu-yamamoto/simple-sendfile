@@ -9,7 +9,7 @@ Description:            Cross platform library for the sendfile system call.
                         This library tries to call minimum system calls which
                         are the bottleneck of web servers.
 Category:               Network
-Cabal-Version:          >= 1.6
+Cabal-Version:          >= 1.8
 Build-Type:             Simple
 
 Library
@@ -24,24 +24,37 @@ Library
                       , bytestring
   -- NetBSD and OpenBSD don't have sendfile
   if os(freebsd)
-    CPP-Options:   -DOS_BSD
-    Other-Modules: Network.Sendfile.BSD
-    Build-Depends: unix
+    CPP-Options:        -DOS_BSD
+    Other-Modules:      Network.Sendfile.BSD
+    Build-Depends:      unix
   else
     if os(darwin)
-      CPP-Options:   -DOS_MacOS
-      Other-Modules: Network.Sendfile.MacOS
-      Build-Depends: unix
+      CPP-Options:      -DOS_MacOS
+      Other-Modules:    Network.Sendfile.MacOS
+      Build-Depends:    unix
     else
       if os(linux)
-        CPP-Options:   -DOS_Linux
-        Other-Modules: Network.Sendfile.Linux
-        Build-Depends: unix
+        CPP-Options:    -DOS_Linux
+        Other-Modules:  Network.Sendfile.Linux
+        Build-Depends:  unix
       else
         Other-Modules: Network.Sendfile.Fallback
         Build-Depends: bytestring      >= 0.9   && < 0.10
                      , conduit         >= 0.4.1 && < 0.5
                      , transformers    >= 0.2.2 && < 0.4
+
+Test-Suite spec
+  Type:                exitcode-stdio-1.0
+  Main-Is:             Spec.hs
+  Build-Depends:       base
+                     , HUnit
+                     , conduit
+                     , hspec
+                     , hspec-shouldbe
+                     , network
+                     , network-conduit
+                     , process
+                     , simple-sendfile
 
 Source-Repository head
   Type:                 git

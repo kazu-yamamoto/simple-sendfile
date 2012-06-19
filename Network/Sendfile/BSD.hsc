@@ -1,6 +1,9 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 
-module Network.Sendfile.BSD (sendfile) where
+module Network.Sendfile.BSD (
+    sendfile
+  , sendfileWithHeader
+  ) where
 
 import Control.Concurrent
 import Control.Exception
@@ -73,3 +76,6 @@ c_sendfile fd s offset len lenp = c_sendfile' fd s offset len nullPtr lenp 0
 
 foreign import ccall unsafe "sys/uio.h sendfile" c_sendfile'
     :: Fd -> Fd -> COff -> CSize -> Ptr () -> Ptr COff -> CInt -> IO CInt
+
+sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
+sendfileWithHeader = undefined

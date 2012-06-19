@@ -1,4 +1,7 @@
-module Network.Sendfile.Fallback (sendfile) where
+module Network.Sendfile.Fallback (
+    sendfile
+  , sendfileWithHeader
+  ) where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.ByteString (ByteString)
@@ -28,3 +31,6 @@ sinkSocket s hook = NeedInput push close
         liftIO hook
         return (NeedInput push close)
     close = return ()
+
+sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
+sendfileWithHeader = undefined
