@@ -120,8 +120,8 @@ truncateFileCore headers = bracket setup teardown $ \(s2,_) -> do
         return (s2,tid)
       where
         sf s1 ref
-          | headers == [] = sendfile s1 inputFile range (hook ref)
-          | otherwise     = sendfileWithHeader s1 inputFile range (hook ref) headers
+          | headers == [] = sendfile s1 tempFile range (hook ref)
+          | otherwise     = sendfileWithHeader s1 tempFile range (hook ref) headers
         sendEOF = sClose
         hook ref = do
             n <- readIORef ref
