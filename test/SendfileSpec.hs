@@ -30,17 +30,26 @@ spec = do
             sendFile EntireFile `shouldReturn` ExitSuccess
         it "sends a part of file" $ do
             sendFile (PartOfFile 2000 1000000) `shouldReturn` ExitSuccess
-        it "does not fail in infinite loop even if the file is truncated" $ do
-            timeout fiveSecs truncateFile `shouldReturn` Just ()
+        it "terminates even if length is over" $ do
+            shouldTerminate $ sendIllegal (PartOfFile 2000 5000000)
+        it "terminates even if offset is over" $ do
+            shouldTerminate $ sendIllegal (PartOfFile 5000000 6000000)
+        it "terminates even if the file is truncated" $ do
+            shouldTerminate truncateFile
     describe "sendfileWithHeader" $ do
         it "sends an header and an entire file" $ do
             sendFileH EntireFile `shouldReturn` ExitSuccess
         it "sends an header and a part of file" $ do
             sendFileH (PartOfFile 2000 1000000) `shouldReturn` ExitSuccess
-        it "does not fail in infinite loop even if the file is truncated" $ do
-            timeout fiveSecs truncateFileH `shouldReturn` Just ()
+        it "terminates even if length is over" $ do
+            shouldTerminate $ sendIllegalH (PartOfFile 2000 5000000)
+        it "terminates even if offset is over" $ do
+            shouldTerminate $ sendIllegalH (PartOfFile 5000000 6000000)
+        it "terminates even if the file is truncated" $ do
+            shouldTerminate truncateFileH
   where
     fiveSecs = 5000000
+    shouldTerminate body = timeout fiveSecs body `shouldReturn` Just ()
 
 ----------------------------------------------------------------
 
@@ -94,6 +103,42 @@ sendFileCore range headers = bracket setup teardown $ \(s2,_) -> do
 
 ----------------------------------------------------------------
 
+sendIllegal :: FileRange -> IO ()
+sendIllegal range = sendIllegalCore range []
+
+sendIllegalH :: FileRange -> IO ()
+sendIllegalH range = sendIllegalCore range headers
+  where
+    headers = [
+        BS.replicate 100 'a'
+      , BS.replicate 200 'b'
+      , BS.replicate 300 'b'
+      , "\n"
+      ]
+
+sendIllegalCore :: FileRange -> [ByteString] -> IO ()
+sendIllegalCore range headers = bracket setup teardown $ \(s2,_) -> do
+    runResourceT $ sourceSocket s2 $$ sinkFile outputFile
+    return ()
+  where
+    setup = do
+        (s1,s2) <- socketPair AF_UNIX Stream 0
+        tid <- forkIO (sf s1 `finally` sendEOF s1)
+        return (s2,tid)
+      where
+        sf s1
+          | headers == [] = sendfile s1 inputFile range (return ())
+          | otherwise     = sendfileWithHeader s1 inputFile range (return ()) headers
+        sendEOF = sClose
+    teardown (s2,tid) = do
+        sClose s2
+        killThread tid
+        removeFileIfExists outputFile
+    inputFile = "test/inputFile"
+    outputFile = "test/outputFile"
+
+----------------------------------------------------------------
+
 truncateFile :: IO ()
 truncateFile = truncateFileCore []
 
@@ -136,7 +181,6 @@ truncateFileCore headers = bracket setup teardown $ \(s2,_) -> do
     tempFile = "test/tempFile"
     outputFile = "test/outputFile"
     range = EntireFile
-
 
 ----------------------------------------------------------------
 
