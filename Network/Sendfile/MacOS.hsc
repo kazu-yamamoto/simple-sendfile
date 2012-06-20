@@ -21,6 +21,7 @@ import Foreign.Ptr (Ptr, nullPtr)
 import Foreign.Storable (peek, poke)
 import Network.Sendfile.Types
 import Network.Socket
+import Network.Socket.ByteString
 import System.Posix.IO
 import System.Posix.Types (Fd(..))
 
@@ -46,40 +47,29 @@ sendfile sock path range hook = bracket
     sendfile' fd = alloca $ \lenp -> case range of
         EntireFile -> do
             poke lenp 0
-            sendEntire dst fd 0 lenp hook
+            sendloop dst fd 0 lenp hook
         PartOfFile off len -> do
             let off' = fromInteger off
             poke lenp (fromInteger len)
-            sendPart dst fd off' lenp hook
+            sendloop dst fd off' lenp hook
 
-sendEntire :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO () -> IO ()
-sendEntire dst src off lenp hook = do
-    rc <- c_sendfile src dst off lenp
-    when (rc /= 0) $ do
-        errno <- getErrno
-        if errno `elem` [eAGAIN, eINTR] then do
-            sent <- peek lenp
-            poke lenp 0
-            hook
-            threadWaitWrite dst
-            sendEntire dst src (off + sent) lenp hook
-          else
-            throwErrno "Network.SendFile.MacOS.sendEntire"
-
-sendPart :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO () -> IO ()
-sendPart dst src off lenp hook = do
+sendloop :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO () -> IO ()
+sendloop dst src off lenp hook = do
     len <- peek lenp
     rc <- c_sendfile src dst off lenp
     when (rc /= 0) $ do
         errno <- getErrno
         if errno `elem` [eAGAIN, eINTR] then do
             sent <- peek lenp
-            poke lenp (len - sent)
+            if len == 0 then
+                poke lenp 0 -- Entire
+              else
+                poke lenp (len - sent)
             hook
             threadWaitWrite dst
-            sendPart dst src (off + sent) lenp hook
+            sendloop dst src (off + sent) lenp hook
           else
-            throwErrno "Network.SendFile.MacOS.sendPart"
+            throwErrno "Network.SendFile.MacOS.sendloop"
 
 c_sendfile :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO CInt
 c_sendfile fd s offset lenp = c_sendfile' fd s offset lenp nullPtr 0
@@ -88,4 +78,19 @@ foreign import ccall unsafe "sys/uio.h sendfile" c_sendfile'
     :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> Ptr () -> CInt -> IO CInt
 
 sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
-sendfileWithHeader = undefined
+sendfileWithHeader sock path range hook headers = bracket
+    (openFd path ReadOnly Nothing defaultFileFlags)
+    closeFd
+    sendfile'
+  where
+    dst = Fd $ fdSocket sock
+    sendfile' fd = do
+        sendMany sock headers
+        alloca $ \lenp -> case range of
+            EntireFile -> do
+                poke lenp 0
+                sendloop dst fd 0 lenp hook
+            PartOfFile off len -> do
+                let off' = fromInteger off
+                poke lenp (fromInteger len)
+                sendloop dst fd off' lenp hook
