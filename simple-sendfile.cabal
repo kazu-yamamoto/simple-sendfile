@@ -29,6 +29,7 @@ Library
     if os(darwin)
       CPP-Options:      -DOS_MacOS
       Other-Modules:    Network.Sendfile.MacOS
+                        Network.Sendfile.IOVec
       Build-Depends:    unix
     else
       if os(linux)
