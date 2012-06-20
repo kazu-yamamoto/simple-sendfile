@@ -41,9 +41,9 @@ spec = do
             sendFileH EntireFile `shouldReturn` ExitSuccess
         it "sends an header and a part of file" $ do
             sendFileH (PartOfFile 2000 1000000) `shouldReturn` ExitSuccess
-        it "sends an large header and an entire file" $ do
+        it "sends a large header and an entire file" $ do
             sendFileHLarge EntireFile `shouldReturn` ExitSuccess
-        it "sends an large header and a part of file" $ do
+        it "sends a large header and a part of file" $ do
             sendFileHLarge (PartOfFile 2000 1000000) `shouldReturn` ExitSuccess
         it "terminates even if length is over" $ do
             shouldTerminate $ sendIllegalH (PartOfFile 2000 5000000)
