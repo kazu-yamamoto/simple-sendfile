@@ -59,6 +59,7 @@ Test-Suite spec
                       , network-conduit
                       , process
                       , simple-sendfile
+                      , unix
 
 Source-Repository head
   Type:                 git
