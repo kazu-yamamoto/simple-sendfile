@@ -77,12 +77,11 @@ sendPart dst src offp len hook = do
            0  -> return () -- the file is truncated
            _  -> loop (len - fromIntegral bytes)
   where
-    loop left
-      | left == 0 = return ()
-      | otherwise = do
-          hook
-          threadWaitWrite dst
-          sendPart dst src offp left hook
+    loop 0    = return ()
+    loop left = do
+        hook
+        threadWaitWrite dst
+        sendPart dst src offp left hook
 
 -- Dst Src in order. take care
 foreign import ccall unsafe "sendfile" c_sendfile
