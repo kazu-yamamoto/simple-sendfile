@@ -71,9 +71,10 @@ sendPart dst src offp len hook = do
     do bytes <- c_sendfile dst src offp len
        case bytes of
            -1 -> do errno <- getErrno
-                    if errno == eAGAIN
-                       then loop len
-                       else throwErrno "Network.SendFile.Linux.sendPart"
+                    if errno == eAGAIN then
+                        loop len
+                      else
+                        throwErrno "Network.SendFile.Linux.sendPart"
            0  -> return () -- the file is truncated
            _  -> loop (len - fromIntegral bytes)
   where
