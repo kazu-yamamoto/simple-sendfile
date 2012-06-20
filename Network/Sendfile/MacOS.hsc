@@ -93,7 +93,7 @@ sendfileWithHeader sock path range hook hdr = bracket setup teardown $ \fd -> do
                 _ -> return ()
         PartOfFile off len -> do
             let off' = fromInteger off
-            poke lenp (fromInteger len)
+            poke lenp $ fromInteger len + hlen
             mrc <- sendloopHeader dst fd off' lenp hook hdr
             case mrc of
                 Just (newoff, Just newlen) -> do
@@ -104,6 +104,7 @@ sendfileWithHeader sock path range hook hdr = bracket setup teardown $ \fd -> do
     setup = openFd path ReadOnly Nothing defaultFileFlags
     teardown = closeFd
     dst = Fd $ fdSocket sock
+    hlen = fromIntegral . sum . map BS.length $ hdr
 
 sendloopHeader :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO () -> [ByteString] -> IO (Maybe ((#type off_t), Maybe (#type off_t)))
 sendloopHeader dst src off lenp hook hdr = do
@@ -120,7 +121,7 @@ sendloopHeader dst src off lenp hook hdr = do
                 if len == 0 then
                     return $ Just (newoff, Nothing)
                   else
-                    return $ Just (newoff, Just (len + hlen - sent))
+                    return $ Just (newoff, Just (len - sent))
               else do
                 if len == 0 then
                     poke lenp 0 -- Entire
