@@ -49,6 +49,7 @@ Test-Suite spec
   GHC-Options:          -Wall
   Build-Depends:        base
                       , HUnit
+                      , bytestring
                       , conduit
                       , directory
                       , hspec
