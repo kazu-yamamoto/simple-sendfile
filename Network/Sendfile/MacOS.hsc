@@ -129,7 +129,7 @@ sendloopHeader dst src off lenp hook hdr = do
                 hook
                 threadWaitWrite dst
                 let newhdr = remainingChunks (fromIntegral sent) hdr
-                sendloopHeader dst src (off + sent) lenp hook newhdr
+                sendloopHeader dst src off lenp hook newhdr
           else
             throwErrno "Network.SendFile.MacOS.sendloopHeader"
   where

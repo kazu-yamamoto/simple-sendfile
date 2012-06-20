@@ -41,6 +41,10 @@ spec = do
             sendFileH EntireFile `shouldReturn` ExitSuccess
         it "sends an header and a part of file" $ do
             sendFileH (PartOfFile 2000 1000000) `shouldReturn` ExitSuccess
+        it "sends an large header and an entire file" $ do
+            sendFileHLarge EntireFile `shouldReturn` ExitSuccess
+        it "sends an large header and a part of file" $ do
+            sendFileHLarge (PartOfFile 2000 1000000) `shouldReturn` ExitSuccess
         it "terminates even if length is over" $ do
             shouldTerminate $ sendIllegalH (PartOfFile 2000 5000000)
         it "terminates even if offset is over" $ do
@@ -62,7 +66,19 @@ sendFileH range = sendFileCore range headers
     headers = [
         BS.replicate 100 'a'
       , BS.replicate 200 'b'
-      , BS.replicate 300 'b'
+      , BS.replicate 300 'c'
+      , "\n"
+      ]
+
+sendFileHLarge :: FileRange -> IO ExitCode
+sendFileHLarge range = sendFileCore range headers
+  where
+    headers = [
+        BS.replicate 10000 'a'
+      , "\n"
+      , BS.replicate 20000 'b'
+      , "\n"
+      , BS.replicate 30000 'c'
       , "\n"
       ]
 
