@@ -43,44 +43,43 @@ sendfile sock path range hook = bracket
     sendfile'
   where
     dst = Fd $ fdSocket sock
-    sendfile' fd = alloca $ \lenp -> do
-        case range of
-            EntireFile -> do
-                poke lenp 0
-                sendEntire dst fd 0 lenp hook
-            PartOfFile off len -> do
-                let off' = fromInteger off
-                poke lenp (fromInteger len)
-                sendPart dst fd off' lenp hook
+    sendfile' fd = alloca $ \lenp -> case range of
+        EntireFile -> do
+            poke lenp 0
+            sendEntire dst fd 0 lenp hook
+        PartOfFile off len -> do
+            let off' = fromInteger off
+            poke lenp (fromInteger len)
+            sendPart dst fd off' lenp hook
 
 sendEntire :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO () -> IO ()
 sendEntire dst src off lenp hook = do
-    do rc <- c_sendfile src dst off lenp
-       when (rc /= 0) $ do
-           errno <- getErrno
-           if errno `elem` [eAGAIN, eINTR]
-              then do
-                  sent <- peek lenp
-                  poke lenp 0
-                  hook
-                  threadWaitWrite dst
-                  sendEntire dst src (off + sent) lenp hook
-              else throwErrno "Network.SendFile.MacOS.sendEntire"
+    rc <- c_sendfile src dst off lenp
+    when (rc /= 0) $ do
+        errno <- getErrno
+        if errno `elem` [eAGAIN, eINTR] then do
+            sent <- peek lenp
+            poke lenp 0
+            hook
+            threadWaitWrite dst
+            sendEntire dst src (off + sent) lenp hook
+          else
+            throwErrno "Network.SendFile.MacOS.sendEntire"
 
 sendPart :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO () -> IO ()
 sendPart dst src off lenp hook = do
-    do len <- peek lenp
-       rc <- c_sendfile src dst off lenp
-       when (rc /= 0) $ do
-           errno <- getErrno
-           if errno `elem` [eAGAIN, eINTR]
-              then do
-                  sent <- peek lenp
-                  poke lenp (len - sent)
-                  hook
-                  threadWaitWrite dst
-                  sendPart dst src (off + sent) lenp hook
-              else throwErrno "Network.SendFile.MacOS.sendPart"
+    len <- peek lenp
+    rc <- c_sendfile src dst off lenp
+    when (rc /= 0) $ do
+        errno <- getErrno
+        if errno `elem` [eAGAIN, eINTR] then do
+            sent <- peek lenp
+            poke lenp (len - sent)
+            hook
+            threadWaitWrite dst
+            sendPart dst src (off + sent) lenp hook
+          else
+            throwErrno "Network.SendFile.MacOS.sendPart"
 
 c_sendfile :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO CInt
 c_sendfile fd s offset lenp = c_sendfile' fd s offset lenp nullPtr 0
