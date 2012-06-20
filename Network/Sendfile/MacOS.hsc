@@ -38,13 +38,8 @@ import System.Posix.Types (Fd(..))
    is sent and bofore waiting the socket to be ready for writing.
 -}
 sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
-sendfile sock path range hook = bracket
-    (openFd path ReadOnly Nothing defaultFileFlags)
-    closeFd
-    sendfile'
-  where
-    dst = Fd $ fdSocket sock
-    sendfile' fd = alloca $ \lenp -> case range of
+sendfile sock path range hook = bracket setup teardown $ \fd ->
+    alloca $ \lenp -> case range of
         EntireFile -> do
             poke lenp 0
             sendloop dst fd 0 lenp hook
@@ -52,6 +47,10 @@ sendfile sock path range hook = bracket
             let off' = fromInteger off
             poke lenp (fromInteger len)
             sendloop dst fd off' lenp hook
+  where
+    setup = openFd path ReadOnly Nothing defaultFileFlags
+    teardown = closeFd
+    dst = Fd $ fdSocket sock
 
 sendloop :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO () -> IO ()
 sendloop dst src off lenp hook = do
@@ -78,19 +77,17 @@ foreign import ccall unsafe "sys/uio.h sendfile" c_sendfile'
     :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> Ptr () -> CInt -> IO CInt
 
 sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
-sendfileWithHeader sock path range hook headers = bracket
-    (openFd path ReadOnly Nothing defaultFileFlags)
-    closeFd
-    sendfile'
+sendfileWithHeader sock path range hook hdr = bracket setup teardown $ \fd -> do
+    sendMany sock hdr
+    alloca $ \lenp -> case range of
+        EntireFile -> do
+            poke lenp 0
+            sendloop dst fd 0 lenp hook
+        PartOfFile off len -> do
+            let off' = fromInteger off
+            poke lenp (fromInteger len)
+            sendloop dst fd off' lenp hook
   where
+    setup = openFd path ReadOnly Nothing defaultFileFlags
+    teardown = closeFd
     dst = Fd $ fdSocket sock
-    sendfile' fd = do
-        sendMany sock headers
-        alloca $ \lenp -> case range of
-            EntireFile -> do
-                poke lenp 0
-                sendloop dst fd 0 lenp hook
-            PartOfFile off len -> do
-                let off' = fromInteger off
-                poke lenp (fromInteger len)
-                sendloop dst fd off' lenp hook
