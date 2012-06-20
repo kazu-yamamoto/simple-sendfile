@@ -65,7 +65,9 @@ sendFileH range = sendFileCore range headers
   where
     headers = [
         BS.replicate 100 'a'
+      , "\n"
       , BS.replicate 200 'b'
+      , "\n"
       , BS.replicate 300 'c'
       , "\n"
       ]
@@ -127,8 +129,10 @@ sendIllegalH range = sendIllegalCore range headers
   where
     headers = [
         BS.replicate 100 'a'
+      , "\n"
       , BS.replicate 200 'b'
-      , BS.replicate 300 'b'
+      , "\n"
+      , BS.replicate 300 'c'
       , "\n"
       ]
 
@@ -163,8 +167,10 @@ truncateFileH = truncateFileCore headers
   where
     headers = [
         BS.replicate 100 'a'
+      , "\n"
       , BS.replicate 200 'b'
-      , BS.replicate 300 'b'
+      , "\n"
+      , BS.replicate 300 'c'
       , "\n"
       ]
 
