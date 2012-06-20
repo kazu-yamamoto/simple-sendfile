@@ -47,33 +47,33 @@ import System.Posix.Types (Fd(..))
 -- is sent and bofore waiting the socket to be ready for writing.
 
 sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
-sendfile sock path range hook = bracket
-    (openFd path ReadOnly Nothing defaultFileFlags)
-    closeFd
-    sendfile'
-  where
-    dst = Fd $ fdSocket sock
-    sendfile' fd = alloca $ \offp -> case range of
+sendfile sock path range hook = bracket setup teardown $ \fd ->
+    alloca $ \offp -> case range of
         EntireFile -> do
             poke offp 0
             -- System call is very slow. Use PartOfFile instead.
             len <- fileSize <$> getFdStatus fd
             let len' = fromIntegral len
-            sendPart dst fd offp len' hook
+            sendloop dst fd offp len' hook
         PartOfFile off len -> do
             poke offp (fromIntegral off)
             let len' = fromIntegral len
-            sendPart dst fd offp len' hook
+            sendloop dst fd offp len' hook
+  where
+    setup = openFd path ReadOnly Nothing defaultFileFlags
+    teardown = closeFd
+    dst = Fd $ fdSocket sock
 
-sendPart :: Fd -> Fd -> Ptr (#type off_t) -> (#type size_t) -> IO () -> IO ()
-sendPart dst src offp len hook = do
+sendloop :: Fd -> Fd -> Ptr (#type off_t) -> (#type size_t) -> IO () -> IO ()
+sendloop dst src offp len hook = do
     bytes <- c_sendfile dst src offp len
     case bytes of
-        -1 -> do errno <- getErrno
-                 if errno == eAGAIN then
-                     loop len
-                   else
-                     throwErrno "Network.SendFile.Linux.sendPart"
+        -1 -> do
+            errno <- getErrno
+            if errno == eAGAIN then
+                loop len
+              else
+                throwErrno "Network.SendFile.Linux.sendloop"
         0  -> return () -- the file is truncated
         _  -> loop (len - fromIntegral bytes)
   where
@@ -81,7 +81,7 @@ sendPart dst src offp len hook = do
     loop left = do
         hook
         threadWaitWrite dst
-        sendPart dst src offp left hook
+        sendloop dst src offp left hook
 
 -- Dst Src in order. take care
 foreign import ccall unsafe "sendfile" c_sendfile
