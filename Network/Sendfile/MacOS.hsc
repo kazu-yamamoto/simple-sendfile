@@ -22,7 +22,6 @@ import Foreign.Ptr (Ptr, nullPtr)
 import Foreign.Storable (peek, poke)
 import Network.Sendfile.Types
 import Network.Socket
-import Network.Socket.ByteString
 import System.Posix.IO
 import System.Posix.Types (Fd(..))
 
@@ -88,15 +87,19 @@ sendfileWithHeader sock path range hook hdr = bracket setup teardown $ \fd -> do
             poke lenp 0
             mrc <- sendloopHeader dst fd 0 lenp hook hdr
             case mrc of
-                Nothing -> return ()
                 Just (newoff, _) -> do
                     poke lenp 0
                     sendloop dst fd newoff lenp hook
+                _ -> return ()
         PartOfFile off len -> do
-            sendMany sock hdr
             let off' = fromInteger off
             poke lenp (fromInteger len)
-            sendloop dst fd off' lenp hook
+            mrc <- sendloopHeader dst fd off' lenp hook hdr
+            case mrc of
+                Just (newoff, Just newlen) -> do
+                    poke lenp newlen
+                    sendloop dst fd newoff lenp hook
+                _ -> return ()
   where
     setup = openFd path ReadOnly Nothing defaultFileFlags
     teardown = closeFd
