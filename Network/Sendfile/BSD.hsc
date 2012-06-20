@@ -8,6 +8,7 @@ module Network.Sendfile.BSD (
 import Control.Concurrent
 import Control.Exception
 import Control.Monad
+import Data.ByteString (ByteString)
 import Foreign.C.Error (eAGAIN, eINTR, getErrno, throwErrno)
 import Foreign.C.Types (CInt, CSize)
 import Foreign.Marshal (alloca)
