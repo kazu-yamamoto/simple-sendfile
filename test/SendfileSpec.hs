@@ -10,7 +10,6 @@ import Data.Conduit
 import Data.Conduit.Binary as CB
 import Data.Conduit.List as CL
 import Data.Conduit.Network
-import Data.Monoid
 import Network.Sendfile
 import Network.Socket
 import System.Directory
@@ -33,43 +32,30 @@ spec = do
             runSendfileH (PartOfFile 2000 1000000) `shouldReturn` ExitSuccess
 
 runSendfile :: FileRange -> IO ExitCode
-runSendfile range = bracket setup teardown $ \(s2,_) -> do
-    runResourceT $ sourceSocket s2 $$ sinkFile outputFile
-    runResourceT $ copyfile range
-    system $ "cmp -s " ++ outputFile ++ " " ++ expectedFile
-  where
-    copyfile EntireFile = sourceFile inputFile $$ sinkFile expectedFile
-    copyfile (PartOfFile off len) = sourceFile inputFile
-                                 $= CB.isolate (off' + len')
-                                 $$ (CB.take off' >> sinkFile expectedFile)
-      where
-        off' = fromIntegral off
-        len' = fromIntegral len
-    setup = do
-        (s1,s2) <- socketPair AF_UNIX Stream 0
-        tid <- forkIO (sendfile s1 inputFile range (return ()) `finally` sendEOF s1)
-        return (s2,tid)
-      where
-        sendEOF = sClose
-    teardown (s2,tid) = do
-        sClose s2
-        killThread tid
-        removeFileIfExists outputFile
-        removeFileIfExists expectedFile
-    inputFile = "test/inputFile"
-    outputFile = "test/outputFile"
-    expectedFile = "test/expectedFile"
+runSendfile range = runSendfileCore range []
 
 runSendfileH :: FileRange -> IO ExitCode
-runSendfileH range = bracket setup teardown $ \(s2,_) -> do
+runSendfileH range = runSendfileCore range headers
+  where
+    headers = [
+        BS.replicate 100 'a'
+      , BS.replicate 200 'b'
+      , BS.replicate 300 'b'
+      , "\n"
+      ]
+
+runSendfileCore :: FileRange -> [ByteString] -> IO ExitCode
+runSendfileCore range headers = bracket setup teardown $ \(s2,_) -> do
     runResourceT $ sourceSocket s2 $$ sinkFile outputFile
     runResourceT $ copyfile range
     system $ "cmp -s " ++ outputFile ++ " " ++ expectedFile
   where
-    copyfile EntireFile = (CL.sourceList headers <> sourceFile inputFile)
-                       $$ sinkFile expectedFile
+    copyfile EntireFile = do
+        -- of course, we can use <> here
+        sourceList headers $$ sinkFile expectedFile
+        sourceFile inputFile $$ sinkAppendFile expectedFile
     copyfile (PartOfFile off len) = do
-        CL.sourceList headers $$ sinkFile expectedFile
+        sourceList headers $$ sinkFile expectedFile
         sourceFile inputFile $= CB.isolate (off' + len')
                              $$ (CB.take off' >> sinkAppendFile expectedFile)
       where
@@ -77,9 +63,12 @@ runSendfileH range = bracket setup teardown $ \(s2,_) -> do
         len' = fromIntegral len
     setup = do
         (s1,s2) <- socketPair AF_UNIX Stream 0
-        tid <- forkIO (sendfileWithHeader s1 inputFile range (return ()) headers `finally` sendEOF s1)
+        tid <- forkIO (sf s1 `finally` sendEOF s1)
         return (s2,tid)
       where
+        sf s1
+          | headers == [] = sendfile s1 inputFile range (return ())
+          | otherwise     = sendfileWithHeader s1 inputFile range (return ()) headers
         sendEOF = sClose
     teardown (s2,tid) = do
         sClose s2
@@ -89,12 +78,6 @@ runSendfileH range = bracket setup teardown $ \(s2,_) -> do
     inputFile = "test/inputFile"
     outputFile = "test/outputFile"
     expectedFile = "test/expectedFile"
-    headers = [
-        BS.replicate 100 'a'
-      , BS.replicate 200 'b'
-      , BS.replicate 300 'b'
-      , "\n"
-      ]
 
 removeFileIfExists :: FilePath -> IO ()
 removeFileIfExists file = do
