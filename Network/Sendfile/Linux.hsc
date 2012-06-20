@@ -53,30 +53,29 @@ sendfile sock path range hook = bracket
     sendfile'
   where
     dst = Fd $ fdSocket sock
-    sendfile' fd = alloca $ \offp -> do
-        case range of
-            EntireFile -> do
-                poke offp 0
-                -- System call is very slow. Use PartOfFile instead.
-                len <- fileSize <$> getFdStatus fd
-                let len' = fromIntegral len
-                sendPart dst fd offp len' hook
-            PartOfFile off len -> do
-                poke offp (fromIntegral off)
-                let len' = fromIntegral len
-                sendPart dst fd offp len' hook
+    sendfile' fd = alloca $ \offp -> case range of
+        EntireFile -> do
+            poke offp 0
+            -- System call is very slow. Use PartOfFile instead.
+            len <- fileSize <$> getFdStatus fd
+            let len' = fromIntegral len
+            sendPart dst fd offp len' hook
+        PartOfFile off len -> do
+            poke offp (fromIntegral off)
+            let len' = fromIntegral len
+            sendPart dst fd offp len' hook
 
 sendPart :: Fd -> Fd -> Ptr (#type off_t) -> (#type size_t) -> IO () -> IO ()
 sendPart dst src offp len hook = do
-    do bytes <- c_sendfile dst src offp len
-       case bytes of
-           -1 -> do errno <- getErrno
-                    if errno == eAGAIN then
-                        loop len
-                      else
-                        throwErrno "Network.SendFile.Linux.sendPart"
-           0  -> return () -- the file is truncated
-           _  -> loop (len - fromIntegral bytes)
+    bytes <- c_sendfile dst src offp len
+    case bytes of
+        -1 -> do errno <- getErrno
+                 if errno == eAGAIN then
+                     loop len
+                   else
+                     throwErrno "Network.SendFile.Linux.sendPart"
+        0  -> return () -- the file is truncated
+        _  -> loop (len - fromIntegral bytes)
   where
     loop 0    = return ()
     loop left = do
