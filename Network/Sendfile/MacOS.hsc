@@ -23,6 +23,9 @@ import qualified Data.ByteString as BS
 
 #include <sys/types.h>
 
+entire :: COff
+entire = 0
+
 {-|
    Simple binding for sendfile() of MacOS.
 
@@ -35,34 +38,30 @@ import qualified Data.ByteString as BS
 -}
 sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
 sendfile sock path range hook = bracket setup teardown $ \fd ->
-    alloca $ \lenp -> case range of
+    alloca $ \sentp -> case range of
         EntireFile -> do
-            poke lenp 0
-            sendloop dst fd 0 lenp hook
-        PartOfFile off len -> do
-            let off' = fromInteger off
-            poke lenp (fromInteger len)
-            sendloop dst fd off' lenp hook
+            sendloop dst fd 0 entire sentp hook
+        PartOfFile off' len' -> do
+            let off = fromInteger off'
+                len = fromInteger len'
+            sendloop dst fd off len sentp hook
   where
     setup = openFd path ReadOnly Nothing defaultFileFlags
     teardown = closeFd
     dst = Fd $ fdSocket sock
 
-sendloop :: Fd -> Fd -> COff -> Ptr COff -> IO () -> IO ()
-sendloop dst src off lenp hook = do
-    len <- peek lenp
-    rc <- sendFile src dst off lenp nullPtr
+sendloop :: Fd -> Fd -> COff -> COff -> Ptr COff -> IO () -> IO ()
+sendloop dst src off len sentp hook = do
+    rc <- sendFile src dst off len sentp nullPtr
     when (rc /= 0) $ do
         errno <- getErrno
         if errno `elem` [eAGAIN, eINTR] then do
-            sent <- peek lenp
-            if len == 0 then
-                poke lenp 0 -- Entire
-              else
-                poke lenp (len - sent)
+            sent <- peek sentp
             hook
             threadWaitWrite dst
-            sendloop dst src (off + sent) lenp hook
+            let newoff = off + sent
+                newlen = if len == entire then entire else len - sent
+            sendloop dst src newoff newlen sentp hook
           else
             throwErrno "Network.SendFile.MacOS.sendloop"
 
@@ -70,23 +69,18 @@ sendloop dst src off lenp hook = do
 
 sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
 sendfileWithHeader sock path range hook hdr = bracket setup teardown $ \fd -> do
-    alloca $ \lenp -> case range of
+    alloca $ \sentp -> case range of
         EntireFile -> do
-            poke lenp 0
-            mrc <- sendloopHeader dst fd 0 lenp hook hdr hlen
+            mrc <- sendloopHeader dst fd 0 entire sentp hook hdr hlen
             case mrc of
-                Just (newoff, _) -> do
-                    poke lenp 0
-                    sendloop dst fd newoff lenp hook
+                Just (newoff, _) -> sendloop dst fd newoff entire sentp hook
                 _ -> return ()
-        PartOfFile off len -> do
-            let off' = fromInteger off
-            poke lenp $ fromInteger len + hlen
-            mrc <- sendloopHeader dst fd off' lenp hook hdr hlen
+        PartOfFile off' len' -> do
+            let off = fromInteger off'
+                len = fromInteger len' + hlen
+            mrc <- sendloopHeader dst fd off len sentp hook hdr hlen
             case mrc of
-                Just (newoff, Just newlen) -> do
-                    poke lenp newlen
-                    sendloop dst fd newoff lenp hook
+                Just (newoff, Just newlen) -> sendloop dst fd newoff newlen sentp hook
                 _ -> return ()
   where
     setup = openFd path ReadOnly Nothing defaultFileFlags
@@ -94,16 +88,15 @@ sendfileWithHeader sock path range hook hdr = bracket setup teardown $ \fd -> do
     dst = Fd $ fdSocket sock
     hlen = fromIntegral . sum . map BS.length $ hdr
 
-sendloopHeader :: Fd -> Fd -> COff -> Ptr COff -> IO () -> [ByteString] -> COff -> IO (Maybe (COff, Maybe COff))
-sendloopHeader dst src off lenp hook hdr hlen = do
-    len <- peek lenp
-    rc <- withSfHdtr hdr $ sendFile src dst off lenp
+sendloopHeader :: Fd -> Fd -> COff -> COff -> Ptr COff -> IO () -> [ByteString] -> COff -> IO (Maybe (COff, Maybe COff))
+sendloopHeader dst src off len sentp hook hdr hlen = do
+    rc <- withSfHdtr hdr $ sendFile src dst off len sentp
     if rc == 0 then
         return Nothing
       else do
         errno <- getErrno
         if errno `elem` [eAGAIN, eINTR] then do
-            sent <- peek lenp
+            sent <- peek sentp
             if sent >= hlen then do
                 let newoff = off + sent - hlen
                 if len == 0 then
@@ -111,21 +104,23 @@ sendloopHeader dst src off lenp hook hdr hlen = do
                   else
                     return $ Just (newoff, Just (len - sent))
               else do
-                if len == 0 then
-                    poke lenp 0 -- Entire
-                  else
-                    poke lenp (len - sent)
                 hook
                 threadWaitWrite dst
-                let newhdr = remainingChunks (fromIntegral sent) hdr
-                sendloopHeader dst src off lenp hook newhdr (hlen - sent)
+                let newlen = if len == entire then entire else len - sent
+                    newhdr = remainingChunks (fromIntegral sent) hdr
+                    newhlen = hlen - sent
+                sendloopHeader dst src off newlen sentp hook newhdr newhlen
           else
             throwErrno "Network.SendFile.MacOS.sendloopHeader"
 
 ----------------------------------------------------------------
 
-sendFile :: Fd -> Fd -> COff -> Ptr COff -> Ptr SfHdtr -> IO CInt
-sendFile fd s offset lenp hdrp = foobar fd s offset lenp hdrp 0
+#ifdef OS_MacOS
+sendFile :: Fd -> Fd -> COff -> COff -> Ptr COff -> Ptr SfHdtr -> IO CInt
+sendFile fd s offset len sentp hdrp = do
+    poke sentp len
+    foobar fd s offset sentp hdrp 0
 
 foreign import ccall unsafe "sys/uio.h sendfile"
     foobar :: Fd -> Fd -> COff -> Ptr COff -> Ptr SfHdtr -> CInt -> IO CInt
+#endif
