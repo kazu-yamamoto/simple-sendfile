@@ -73,14 +73,20 @@ sendfileWithHeader sock path range hook hdr = bracket setup teardown $ \fd -> do
         EntireFile -> do
             mrc <- sendloopHeader dst fd 0 entire sentp hook hdr hlen
             case mrc of
-                Just (newoff, _) -> sendloop dst fd newoff entire sentp hook
+                Just (newoff, _) -> do
+                    hook
+                    threadWaitWrite dst
+                    sendloop dst fd newoff entire sentp hook
                 _ -> return ()
         PartOfFile off' len' -> do
             let off = fromInteger off'
                 len = fromInteger len' + hlen
             mrc <- sendloopHeader dst fd off len sentp hook hdr hlen
             case mrc of
-                Just (newoff, Just newlen) -> sendloop dst fd newoff newlen sentp hook
+                Just (newoff, Just newlen) -> do
+                    hook
+                    threadWaitWrite dst
+                    sendloop dst fd newoff newlen sentp hook
                 _ -> return ()
   where
     setup = openFd path ReadOnly Nothing defaultFileFlags
