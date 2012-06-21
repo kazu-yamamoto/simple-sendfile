@@ -13,7 +13,7 @@ import Data.ByteString.Unsafe
 import Data.Int
 import Data.Word
 import Foreign.C.Error (eAGAIN, getErrno, throwErrno)
-import Foreign.C.Types
+import Foreign.C.Types (CInt(..), CSize(..))
 import Foreign.Marshal (alloca)
 import Foreign.Ptr (Ptr)
 import Foreign.Storable (poke)
@@ -23,7 +23,7 @@ import Network.Socket
 import Network.Socket.Internal (throwSocketErrorIfMinus1RetryMayBlock)
 import System.Posix.Files
 import System.Posix.IO
-import System.Posix.Types (Fd(..))
+import System.Posix.Types (Fd(..), COff(..))
 
 #include <sys/sendfile.h>
 #include <sys/socket.h>
@@ -64,7 +64,7 @@ sendfile sock path range hook = bracket setup teardown $ \fd ->
     teardown = closeFd
     dst = Fd $ fdSocket sock
 
-sendloop :: Fd -> Fd -> Ptr (#type off_t) -> (#type size_t) -> IO () -> IO ()
+sendloop :: Fd -> Fd -> Ptr COff -> CSize -> IO () -> IO ()
 sendloop dst src offp len hook = do
     bytes <- c_sendfile dst src offp len
     case bytes of
@@ -85,7 +85,7 @@ sendloop dst src offp len hook = do
 
 -- Dst Src in order. take care
 foreign import ccall unsafe "sendfile" c_sendfile
-    :: Fd -> Fd -> Ptr (#type off_t) -> (#type size_t) -> IO (#type ssize_t)
+    :: Fd -> Fd -> Ptr COff -> CSize -> IO (#type ssize_t)
 
 ----------------------------------------------------------------
 
