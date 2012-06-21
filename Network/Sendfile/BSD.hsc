@@ -27,16 +27,16 @@ import System.Posix.Types
 entire :: COff
 entire = 0
 
-{-|
-   Simple binding for sendfile() of MacOS.
+-- |
+-- Simple binding for sendfile() of BSD and MacOS.
+--
+-- - Used system calls: open(), sendfile(), and close().
+--
+-- The fourth action argument is called when a file is sent as chunks.
+-- Chucking is inevitable if the socket is non-blocking (this is the
+-- default) and the file is large. The action is called after a chunk
+-- is sent and bofore waiting the socket to be ready for writing.
 
-   - Used system calls: open(), sendfile(), and close().
-
-   The fourth action argument is called when a file is sent as chunks.
-   Chucking is inevitable if the socket is non-blocking (this is the
-   default) and the file is large. The action is called after a chunk
-   is sent and bofore waiting the socket to be ready for writing.
--}
 sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
 sendfile sock path range hook = bracket setup teardown $ \fd ->
     alloca $ \sentp -> do
@@ -65,6 +65,19 @@ sendloop dst src off len sentp hook = do
             throwErrno "Network.SendFile.MacOS.sendloop"
 
 ----------------------------------------------------------------
+
+-- |
+-- Simple binding for sendfile() of BSD and MacOS.
+--
+-- - Used system calls: open(), sendfile(), and close().
+--
+-- The fifth header is also sent with sendfile(). If the file is
+-- small enough, the header and the file is send in a single TCP packet.
+--
+-- The fourth action argument is called when a file is sent as chunks.
+-- Chucking is inevitable if the socket is non-blocking (this is the
+-- default) and the file is large. The action is called after a chunk
+-- is sent and bofore waiting the socket to be ready for writing.
 
 sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
 sendfileWithHeader sock path range hook hdr =
