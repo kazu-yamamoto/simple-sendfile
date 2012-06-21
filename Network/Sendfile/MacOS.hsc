@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, ForeignFunctionInterface #-}
+{-# LANGUAGE ForeignFunctionInterface #-}
 
 module Network.Sendfile.MacOS (
     sendfile
@@ -9,23 +9,17 @@ import Control.Concurrent
 import Control.Exception
 import Control.Monad
 import Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
-import Data.Int
 import Foreign.C.Error (eAGAIN, eINTR, getErrno, throwErrno)
-#if __GLASGOW_HASKELL__ >= 703
-import Foreign.C.Types (CInt(CInt))
-#else
-import Foreign.C.Types (CInt)
-#endif
+import Foreign.C.Types (CInt(..))
 import Foreign.Marshal (alloca)
 import Foreign.Ptr (Ptr, nullPtr)
 import Foreign.Storable (peek, poke)
+import Network.Sendfile.IOVec
 import Network.Sendfile.Types
 import Network.Socket
 import System.Posix.IO
-import System.Posix.Types (Fd(..))
-
-import Network.Sendfile.IOVec
+import System.Posix.Types (Fd(..), COff(..))
+import qualified Data.ByteString as BS
 
 #include <sys/types.h>
 
@@ -54,7 +48,7 @@ sendfile sock path range hook = bracket setup teardown $ \fd ->
     teardown = closeFd
     dst = Fd $ fdSocket sock
 
-sendloop :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO () -> IO ()
+sendloop :: Fd -> Fd -> COff -> Ptr COff -> IO () -> IO ()
 sendloop dst src off lenp hook = do
     len <- peek lenp
     rc <- c_sendfile src dst off lenp nullPtr
@@ -72,11 +66,11 @@ sendloop dst src off lenp hook = do
           else
             throwErrno "Network.SendFile.MacOS.sendloop"
 
-c_sendfile :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> Ptr SfHdtr -> IO CInt
+c_sendfile :: Fd -> Fd -> COff -> Ptr COff -> Ptr SfHdtr -> IO CInt
 c_sendfile fd s offset lenp hdrp = c_sendfile' fd s offset lenp hdrp 0
 
 foreign import ccall unsafe "sys/uio.h sendfile" c_sendfile'
-    :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> Ptr SfHdtr -> CInt -> IO CInt
+    :: Fd -> Fd -> COff -> Ptr COff -> Ptr SfHdtr -> CInt -> IO CInt
 
 ----------------------------------------------------------------
 
@@ -106,7 +100,7 @@ sendfileWithHeader sock path range hook hdr = bracket setup teardown $ \fd -> do
     dst = Fd $ fdSocket sock
     hlen = fromIntegral . sum . map BS.length $ hdr
 
-sendloopHeader :: Fd -> Fd -> (#type off_t) -> Ptr (#type off_t) -> IO () -> [ByteString] -> IO (Maybe ((#type off_t), Maybe (#type off_t)))
+sendloopHeader :: Fd -> Fd -> COff -> Ptr COff -> IO () -> [ByteString] -> IO (Maybe (COff, Maybe COff))
 sendloopHeader dst src off lenp hook hdr = do
     len <- peek lenp
     rc <- withSfHdtr hdr $ c_sendfile src dst off lenp
