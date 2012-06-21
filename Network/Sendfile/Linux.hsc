@@ -120,7 +120,7 @@ sendAllMsgMore sock hook bs = do
     sent <- sendMsgMore sock bs
     when (sent < B.length bs) $ do
         hook
-        sendAllMsgMore sock (B.drop sent bs)
+        sendAllMsgMore sock hook (B.drop sent bs)
 
 sendMsgMore :: Socket -> ByteString -> IO Int
 sendMsgMore (MkSocket s _ _ _ _) xs =
