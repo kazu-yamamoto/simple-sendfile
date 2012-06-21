@@ -71,6 +71,7 @@ sendfileWithHeader sock path range hook hdr =
     bracket setup teardown $ \fd -> alloca $ \sentp ->
         if isFreeBSD && hlen >= 8192 then do
             sendMany sock hdr
+            hook
             sendfile sock path range hook
           else do
             let (off,len) = case range of
