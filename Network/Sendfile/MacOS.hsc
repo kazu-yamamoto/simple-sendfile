@@ -116,11 +116,21 @@ sendloopHeader dst src off len sentp hook hdr hlen = do
 ----------------------------------------------------------------
 
 #ifdef OS_MacOS
+-- Shuffle the order of arguments for currying.
 sendFile :: Fd -> Fd -> COff -> COff -> Ptr COff -> Ptr SfHdtr -> IO CInt
 sendFile fd s offset len sentp hdrp = do
     poke sentp len
-    foobar fd s offset sentp hdrp 0
+    c_sendfile fd s offset sentp hdrp 0
 
 foreign import ccall unsafe "sys/uio.h sendfile"
-    foobar :: Fd -> Fd -> COff -> Ptr COff -> Ptr SfHdtr -> CInt -> IO CInt
+    c_sendfile :: Fd -> Fd -> COff -> Ptr COff -> Ptr SfHdtr -> CInt -> IO CInt
+#else
+-- Let's don't use CSize for 'len' and use COff for convenience.
+-- Shuffle the order of arguments for currying.
+sendFile :: Fd -> Fd -> COff -> COff -> Ptr COff -> Ptr SfHdtr -> IO CInt
+sendFile fd s offset len sentp hdrp =
+    c_sendfile fd s offset len hdrp sentp 0
+
+foreign import ccall unsafe "sys/uio.h sendfile"
+    c_sendfile :: Fd -> Fd -> COff -> COff -> Ptr SfHdtr -> Ptr COff -> CInt -> IO CInt
 #endif
