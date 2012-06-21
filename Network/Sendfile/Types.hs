@@ -1,8 +1,8 @@
 module Network.Sendfile.Types where
 
-{-|
-  File range for 'sendfile'.
--}
+-- |
+--  File range for 'sendfile'.
+
 data FileRange = EntireFile
                | PartOfFile {
                    rangeOffset :: Integer
