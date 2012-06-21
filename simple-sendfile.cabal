@@ -24,11 +24,12 @@ Library
   if os(freebsd)
     CPP-Options:        -DOS_BSD
     Other-Modules:      Network.Sendfile.BSD
+                        Network.Sendfile.IOVec
     Build-Depends:      unix
   else
     if os(darwin)
       CPP-Options:      -DOS_MacOS
-      Other-Modules:    Network.Sendfile.MacOS
+      Other-Modules:    Network.Sendfile.BSD
                         Network.Sendfile.IOVec
       Build-Depends:    unix
     else

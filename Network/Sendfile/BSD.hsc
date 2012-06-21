@@ -1,6 +1,6 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 
-module Network.Sendfile.MacOS (
+module Network.Sendfile.BSD (
     sendfile
   , sendfileWithHeader
   ) where

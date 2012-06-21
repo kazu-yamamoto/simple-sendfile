@@ -17,7 +17,7 @@ import Network.Sendfile.Types
 #ifdef OS_BSD
 import Network.Sendfile.BSD
 #elif  OS_MacOS
-import Network.Sendfile.MacOS
+import Network.Sendfile.BSD
 #elif  OS_Linux
 import Network.Sendfile.Linux
 #elif  OS_Windows
