@@ -113,7 +113,6 @@ sendfileWithHeader sock path range hook hdr = do
     -- Copying is much faster than syscall.
     sendAllMsgMore sock hook $ B.concat hdr
     hook
-    threadWaitWrite sock
     sendfile sock path range hook
 
 sendAllMsgMore :: Socket -> IO () -> ByteString -> IO ()
