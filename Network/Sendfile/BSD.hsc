@@ -9,6 +9,7 @@ import Control.Concurrent
 import Control.Exception
 import Control.Monad
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
 import Foreign.C.Error (eAGAIN, eINTR, getErrno, throwErrno)
 import Foreign.C.Types
 import Foreign.Marshal (alloca)
@@ -17,9 +18,9 @@ import Foreign.Storable (peek, poke)
 import Network.Sendfile.IOVec
 import Network.Sendfile.Types
 import Network.Socket
+import Network.Socket.ByteString
 import System.Posix.IO
 import System.Posix.Types
-import qualified Data.ByteString as BS
 
 #include <sys/types.h>
 
@@ -38,13 +39,11 @@ entire = 0
 -}
 sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
 sendfile sock path range hook = bracket setup teardown $ \fd ->
-    alloca $ \sentp -> case range of
-        EntireFile -> do
-            sendloop dst fd 0 entire sentp hook
-        PartOfFile off' len' -> do
-            let off = fromInteger off'
-                len = fromInteger len'
-            sendloop dst fd off len sentp hook
+    alloca $ \sentp -> do
+        let (off,len) = case range of
+                EntireFile           -> (0, entire)
+                PartOfFile off' len' -> (fromInteger off', fromInteger len')
+        sendloop dst fd off len sentp hook
   where
     setup = openFd path ReadOnly Nothing defaultFileFlags
     teardown = closeFd
@@ -68,33 +67,30 @@ sendloop dst src off len sentp hook = do
 ----------------------------------------------------------------
 
 sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
-sendfileWithHeader sock path range hook hdr = bracket setup teardown $ \fd -> do
-    alloca $ \sentp -> case range of
-        EntireFile -> do
-            mrc <- sendloopHeader dst fd 0 entire sentp hook hdr hlen
-            case mrc of
-                Just (newoff, _) -> do
-                    hook
-                    threadWaitWrite dst
-                    sendloop dst fd newoff entire sentp hook
-                _ -> return ()
-        PartOfFile off' len' -> do
-            let off = fromInteger off'
-                len = fromInteger len' + hlen
+sendfileWithHeader sock path range hook hdr =
+    bracket setup teardown $ \fd -> alloca $ \sentp ->
+        if isFreeBSD && hlen >= 8192 then do
+            sendMany sock hdr
+            sendfile sock path range hook
+          else do
+            let (off,len) = case range of
+                    EntireFile           -> (0,entire)
+                    PartOfFile off' len' -> (fromInteger off'
+                                            ,fromInteger len' + hlen)
             mrc <- sendloopHeader dst fd off len sentp hook hdr hlen
             case mrc of
-                Just (newoff, Just newlen) -> do
+                Nothing              -> return ()
+                Just (newoff,newlen) -> do
                     hook
                     threadWaitWrite dst
                     sendloop dst fd newoff newlen sentp hook
-                _ -> return ()
   where
     setup = openFd path ReadOnly Nothing defaultFileFlags
     teardown = closeFd
     dst = Fd $ fdSocket sock
     hlen = fromIntegral . sum . map BS.length $ hdr
 
-sendloopHeader :: Fd -> Fd -> COff -> COff -> Ptr COff -> IO () -> [ByteString] -> COff -> IO (Maybe (COff, Maybe COff))
+sendloopHeader :: Fd -> Fd -> COff -> COff -> Ptr COff -> IO () -> [ByteString] -> COff -> IO (Maybe (COff, COff))
 sendloopHeader dst src off len sentp hook hdr hlen = do
     rc <- withSfHdtr hdr $ sendFile src dst off len sentp
     if rc == 0 then
@@ -105,10 +101,10 @@ sendloopHeader dst src off len sentp hook hdr hlen = do
             sent <- peek sentp
             if sent >= hlen then do
                 let newoff = off + sent - hlen
-                if len == 0 then
-                    return $ Just (newoff, Nothing)
+                if len == entire then
+                    return $ Just (newoff, entire)
                   else
-                    return $ Just (newoff, Just (len - sent))
+                    return $ Just (newoff, len - sent)
               else do
                 hook
                 threadWaitWrite dst
@@ -130,6 +126,9 @@ sendFile fd s off len sentp hdrp = do
 
 foreign import ccall unsafe "sys/uio.h sendfile"
     c_sendfile :: Fd -> Fd -> COff -> Ptr COff -> Ptr SfHdtr -> CInt -> IO CInt
+
+isFreeBSD :: Bool
+isFreeBSD = False
 #else
 -- Let's don't use CSize for 'len' and use COff for convenience.
 -- Shuffle the order of arguments for currying.
@@ -139,4 +138,7 @@ sendFile fd s off len sentp hdrp =
 
 foreign import ccall unsafe "sys/uio.h sendfile"
     c_sendfile :: Fd -> Fd -> COff -> CSize -> Ptr SfHdtr -> Ptr COff -> CInt -> IO CInt
+
+isFreeBSD :: Bool
+isFreeBSD = True
 #endif
