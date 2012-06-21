@@ -11,9 +11,8 @@ import Control.Monad
 import Data.ByteString as B
 import Data.ByteString.Unsafe
 import Data.Int
-import Data.Word
 import Foreign.C.Error (eAGAIN, getErrno, throwErrno)
-import Foreign.C.Types (CInt(..), CSize(..))
+import Foreign.C.Types
 import Foreign.Marshal (alloca)
 import Foreign.Ptr (Ptr)
 import Foreign.Storable (poke)
@@ -23,7 +22,7 @@ import Network.Socket
 import Network.Socket.Internal (throwSocketErrorIfMinus1RetryMayBlock)
 import System.Posix.Files
 import System.Posix.IO
-import System.Posix.Types (Fd(..), COff(..))
+import System.Posix.Types
 
 #include <sys/sendfile.h>
 #include <sys/socket.h>
@@ -84,8 +83,8 @@ sendloop dst src offp len hook = do
         sendloop dst src offp left hook
 
 -- Dst Src in order. take care
-foreign import ccall unsafe "sendfile" c_sendfile
-    :: Fd -> Fd -> Ptr COff -> CSize -> IO (#type ssize_t)
+foreign import ccall unsafe "sendfile"
+    c_sendfile :: Fd -> Fd -> Ptr COff -> CSize -> IO (#type ssize_t)
 
 ----------------------------------------------------------------
 
@@ -129,4 +128,4 @@ sendMsgMore (MkSocket s _ _ _ _) xs =
         c_send s str (fromIntegral len) (#const MSG_MORE)
 
 foreign import ccall unsafe "send"
-  c_send :: CInt -> Ptr a -> CSize -> CInt -> IO CInt
+  c_send :: CInt -> Ptr CChar -> CSize -> CInt -> IO (#type ssize_t)
