@@ -111,21 +111,25 @@ foreign import ccall unsafe "sendfile"
 sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
 sendfileWithHeader sock path range hook hdr = do
     -- Copying is much faster than syscall.
-    sendAllMsgMore sock $ B.concat hdr
+    sendAllMsgMore sock hook $ B.concat hdr
+    hook
+    threadWaitWrite sock
     sendfile sock path range hook
 
-sendAllMsgMore :: Socket -> ByteString -> IO ()
-sendAllMsgMore sock bs = do
+sendAllMsgMore :: Socket -> IO () -> ByteString -> IO ()
+sendAllMsgMore sock hook bs = do
     sent <- sendMsgMore sock bs
-    when (sent < B.length bs) $ sendAllMsgMore sock (B.drop sent bs)
+    when (sent < B.length bs) $ do
+        hook
+        sendAllMsgMore sock (B.drop sent bs)
 
 sendMsgMore :: Socket -> ByteString -> IO Int
 sendMsgMore (MkSocket s _ _ _ _) xs =
     unsafeUseAsCStringLen xs $ \(str, len) ->
-    liftM fromIntegral $
-        throwSocketErrorIfMinus1RetryMayBlock "sendMsgMore"
-        (threadWaitWrite (fromIntegral s)) $
-        c_send s str (fromIntegral len) (#const MSG_MORE)
+    fromIntegral <$> throwSocketErrorIfMinus1RetryMayBlock
+                         "sendMsgMore"
+                         (threadWaitWrite (fromIntegral s))
+                         (c_send s str (fromIntegral len) (#const MSG_MORE))
 
 foreign import ccall unsafe "send"
   c_send :: CInt -> Ptr CChar -> CSize -> CInt -> IO (#type ssize_t)
