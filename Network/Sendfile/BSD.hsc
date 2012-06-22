@@ -72,7 +72,9 @@ sendloop dst src off len sentp hook = do
 -- - Used system calls: open(), sendfile(), and close().
 --
 -- The fifth header is also sent with sendfile(). If the file is
--- small enough, the header and the file is send in a single TCP packet.
+-- small enough, the header and the file is send in a single TCP packet
+-- on FreeBSD. MacOS sends the header and the file separately but it is
+-- fast.
 --
 -- The fourth action argument is called when a file is sent as chunks.
 -- Chucking is inevitable if the socket is non-blocking (this is the
@@ -83,10 +85,16 @@ sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -
 sendfileWithHeader sock path range hook hdr =
     bracket setup teardown $ \fd -> alloca $ \sentp ->
         if isFreeBSD && hlen >= 8192 then do
+            -- If the length of the header is larger than 8191,
+            -- threadWaitWrite does not come back on FreeBSD, sigh.
+            -- We use writev() for the header and sendfile() for the file.
             sendMany sock hdr
             hook
             sendfile sock path range hook
           else do
+            -- On MacOS, the header and the body are sent separately.
+            -- But it's fast. the writev() and sendfile() combination
+            -- is also fast.
             let (off,len) = case range of
                     EntireFile           -> (0,entire)
                     PartOfFile off' len' -> (fromInteger off'
