@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Network.Sendfile.Fallback (
     sendfile
   , sendfileWithHeader
@@ -26,6 +27,9 @@ sendfile sock path (PartOfFile off len) hook =
 
 -- See sinkHandle.
 sinkSocket :: MonadIO m => Socket -> IO () -> Sink ByteString m ()
+#if MIN_VERSION_conduit(0,5,0)
+sinkSocket s hook = awaitForever $ \bs -> liftIO $ SB.sendAll s bs >> hook
+#else
 sinkSocket s hook = NeedInput push close
   where
     push bs = flip PipeM (return ()) $ do
@@ -33,6 +37,7 @@ sinkSocket s hook = NeedInput push close
         liftIO hook
         return (NeedInput push close)
     close = return ()
+#endif
 
 -- |
 -- Sendfile emulation using conduit.
