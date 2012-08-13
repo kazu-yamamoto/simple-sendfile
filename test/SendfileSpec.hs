@@ -16,10 +16,10 @@ import Network.Socket
 import System.Directory
 import System.Exit
 import System.IO
-import System.Process
-import Test.Hspec.ShouldBe
 import System.Posix.Files
+import System.Process
 import System.Timeout
+import Test.Hspec
 
 ----------------------------------------------------------------
 

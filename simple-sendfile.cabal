@@ -56,9 +56,8 @@ Test-Suite spec
                       , bytestring
                       , conduit
                       , directory
-                      , hspec
-                      , hspec-discover
-                      , hspec-shouldbe
+                      , hspec >= 1.3
+                      , hspec-expectations
                       , network
                       , network-conduit
                       , process
