@@ -89,7 +89,6 @@ sendfileWithHeader sock path range hook hdr =
             -- threadWaitWrite does not come back on FreeBSD, sigh.
             -- We use writev() for the header and sendfile() for the file.
             sendMany sock hdr
-            hook
             sendfile sock path range hook
           else do
             -- On MacOS, the header and the body are sent separately.
@@ -99,11 +98,10 @@ sendfileWithHeader sock path range hook hdr =
                     EntireFile           -> (0,entire)
                     PartOfFile off' len' -> (fromInteger off'
                                             ,fromInteger len' + hlen)
-            mrc <- sendloopHeader dst fd off len sentp hook hdr hlen
+            mrc <- sendloopHeader dst fd off len sentp hdr hlen
             case mrc of
                 Nothing              -> return ()
                 Just (newoff,newlen) -> do
-                    hook
                     threadWaitWrite dst
                     sendloop dst fd newoff newlen sentp hook
   where
@@ -112,8 +110,8 @@ sendfileWithHeader sock path range hook hdr =
     dst = Fd $ fdSocket sock
     hlen = fromIntegral . sum . map BS.length $ hdr
 
-sendloopHeader :: Fd -> Fd -> COff -> COff -> Ptr COff -> IO () -> [ByteString] -> COff -> IO (Maybe (COff, COff))
-sendloopHeader dst src off len sentp hook hdr hlen = do
+sendloopHeader :: Fd -> Fd -> COff -> COff -> Ptr COff -> [ByteString] -> COff -> IO (Maybe (COff, COff))
+sendloopHeader dst src off len sentp hdr hlen = do
     rc <- withSfHdtr hdr $ sendFile src dst off len sentp
     if rc == 0 then
         return Nothing
@@ -128,12 +126,11 @@ sendloopHeader dst src off len sentp hook hdr hlen = do
                   else
                     return $ Just (newoff, len - sent)
               else do
-                hook
                 threadWaitWrite dst
                 let newlen = if len == entire then entire else len - sent
                     newhdr = remainingChunks (fromIntegral sent) hdr
                     newhlen = hlen - sent
-                sendloopHeader dst src off newlen sentp hook newhdr newhlen
+                sendloopHeader dst src off newlen sentp newhdr newhlen
           else
             throwErrno "Network.SendFile.MacOS.sendloopHeader"
 

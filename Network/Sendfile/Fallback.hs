@@ -48,5 +48,4 @@ sinkSocket s hook = NeedInput push close
 sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
 sendfileWithHeader sock path range hook hdr = do
     sendMany sock hdr
-    hook
     sendfile sock path range hook

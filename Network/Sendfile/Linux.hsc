@@ -111,16 +111,13 @@ foreign import ccall unsafe "sendfile"
 sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
 sendfileWithHeader sock path range hook hdr = do
     -- Copying is much faster than syscall.
-    sendAllMsgMore sock hook $ B.concat hdr
-    hook
+    sendAllMsgMore sock $ B.concat hdr
     sendfile sock path range hook
 
-sendAllMsgMore :: Socket -> IO () -> ByteString -> IO ()
-sendAllMsgMore sock hook bs = do
+sendAllMsgMore :: Socket -> ByteString -> IO ()
+sendAllMsgMore sock bs = do
     sent <- sendMsgMore sock bs
-    when (sent < B.length bs) $ do
-        hook
-        sendAllMsgMore sock hook (B.drop sent bs)
+    when (sent < B.length bs) $ sendAllMsgMore sock (B.drop sent bs)
 
 sendMsgMore :: Socket -> ByteString -> IO Int
 sendMsgMore (MkSocket s _ _ _ _) xs =
