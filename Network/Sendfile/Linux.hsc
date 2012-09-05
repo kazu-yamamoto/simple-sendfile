@@ -161,7 +161,7 @@ sendfileFdWithHeader :: Socket -> Fd -> FileRange -> IO () -> [ByteString] -> IO
 sendfileFdWithHeader sock fd range hook hdr = do
     -- Copying is much faster than syscall.
     sendAllMsgMore sock $ B.concat hdr
-    sendfile sock fd range hook
+    sendfileFd sock fd range hook
 
 sendAllMsgMore :: Socket -> ByteString -> IO ()
 sendAllMsgMore sock bs = do
