@@ -9,6 +9,10 @@
 module Network.Sendfile (
     sendfile
   , sendfileWithHeader
+#if OS_BSD || OS_MacOS || OS_Linux
+  , sendfileFd
+  , sendfileFdWithHeader
+#endif
   , FileRange(..)
   ) where
 
@@ -20,8 +24,6 @@ import Network.Sendfile.BSD
 import Network.Sendfile.BSD
 #elif  OS_Linux
 import Network.Sendfile.Linux
-#elif  OS_Windows
-import Network.Sendfile.Windows
 #else
 import Network.Sendfile.Fallback
 #endif

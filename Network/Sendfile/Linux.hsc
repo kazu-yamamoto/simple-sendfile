@@ -2,7 +2,9 @@
 
 module Network.Sendfile.Linux (
     sendfile
+  , sendfileFd
   , sendfileWithHeader
+  , sendfileFdWithHeader
   ) where
 
 import Control.Applicative
@@ -47,6 +49,29 @@ import System.Posix.Types
 
 sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
 sendfile sock path range hook = bracket setup teardown $ \fd ->
+    sendfileFd sock fd range hook
+  where
+    setup = openFd path ReadOnly Nothing defaultFileFlags
+    teardown = closeFd
+
+-- |
+-- Simple binding for sendfile() of Linux.
+-- Used system calls:
+--
+--  - EntireFile -- stat() and sendfile()
+--
+--  - PartOfFile -- sendfile()
+--
+-- If the size of the file is unknown when sending the entire file,
+-- specifying PartOfFile is much faster.
+--
+-- The fourth action argument is called when a file is sent as chunks.
+-- Chucking is inevitable if the socket is non-blocking (this is the
+-- default) and the file is large. The action is called after a chunk
+-- is sent and bofore waiting the socket to be ready for writing.
+
+sendfileFd :: Socket -> Fd -> FileRange -> IO () -> IO ()
+sendfileFd sock fd range hook =
     alloca $ \offp -> case range of
         EntireFile -> do
             poke offp 0
@@ -59,8 +84,6 @@ sendfile sock path range hook = bracket setup teardown $ \fd ->
             let len' = fromIntegral len
             sendloop dst fd offp len' hook
   where
-    setup = openFd path ReadOnly Nothing defaultFileFlags
-    teardown = closeFd
     dst = Fd $ fdSocket sock
 
 sendloop :: Fd -> Fd -> Ptr COff -> CSize -> IO () -> IO ()
@@ -113,6 +136,32 @@ sendfileWithHeader sock path range hook hdr = do
     -- Copying is much faster than syscall.
     sendAllMsgMore sock $ B.concat hdr
     sendfile sock path range hook
+
+-- |
+-- Simple binding for send() and sendfile() of Linux.
+-- Used system calls:
+--
+--  - EntireFile -- send(), stat() and sendfile()
+--
+--  - PartOfFile -- send() and sendfile()
+--
+-- The fifth header is sent with send() + the MSG_MORE flag. If the
+-- file is small enough, the header and the file is send in a single
+-- TCP packet.
+--
+-- If the size of the file is unknown when sending the entire file,
+-- specifying PartOfFile is much faster.
+--
+-- The fourth action argument is called when a file is sent as chunks.
+-- Chucking is inevitable if the socket is non-blocking (this is the
+-- default) and the file is large. The action is called after a chunk
+-- is sent and bofore waiting the socket to be ready for writing.
+
+sendfileFdWithHeader :: Socket -> Fd -> FileRange -> IO () -> [ByteString] -> IO ()
+sendfileFdWithHeader sock fd range hook hdr = do
+    -- Copying is much faster than syscall.
+    sendAllMsgMore sock $ B.concat hdr
+    sendfile sock fd range hook
 
 sendAllMsgMore :: Socket -> ByteString -> IO ()
 sendAllMsgMore sock bs = do

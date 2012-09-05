@@ -2,7 +2,9 @@
 
 module Network.Sendfile.BSD (
     sendfile
+  , sendfileFd
   , sendfileWithHeader
+  , sendfileFdWithHeader
   ) where
 
 import Control.Concurrent
@@ -39,14 +41,29 @@ entire = 0
 
 sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
 sendfile sock path range hook = bracket setup teardown $ \fd ->
+    sendfileFd sock fd range hook
+  where
+    setup = openFd path ReadOnly Nothing defaultFileFlags
+    teardown = closeFd
+
+-- |
+-- Simple binding for sendfile() of BSD and MacOS.
+--
+-- - Used system calls: sendfile()
+--
+-- The fourth action argument is called when a file is sent as chunks.
+-- Chucking is inevitable if the socket is non-blocking (this is the
+-- default) and the file is large. The action is called after a chunk
+-- is sent and bofore waiting the socket to be ready for writing.
+
+sendfileFd :: Socket -> Fd -> FileRange -> IO () -> IO ()
+sendfileFd sock fd range hook =
     alloca $ \sentp -> do
         let (off,len) = case range of
                 EntireFile           -> (0, entire)
                 PartOfFile off' len' -> (fromInteger off', fromInteger len')
         sendloop dst fd off len sentp hook
   where
-    setup = openFd path ReadOnly Nothing defaultFileFlags
-    teardown = closeFd
     dst = Fd $ fdSocket sock
 
 sendloop :: Fd -> Fd -> COff -> COff -> Ptr COff -> IO () -> IO ()
@@ -83,13 +100,35 @@ sendloop dst src off len sentp hook = do
 
 sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
 sendfileWithHeader sock path range hook hdr =
-    bracket setup teardown $ \fd -> alloca $ \sentp ->
+    bracket setup teardown $ \fd -> sendfileFdWithHeader sock fd range hook hdr
+  where
+    setup = openFd path ReadOnly Nothing defaultFileFlags
+    teardown = closeFd
+
+-- |
+-- Simple binding for sendfile() of BSD and MacOS.
+--
+-- - Used system calls: sendfile()
+--
+-- The fifth header is also sent with sendfile(). If the file is
+-- small enough, the header and the file is send in a single TCP packet
+-- on FreeBSD. MacOS sends the header and the file separately but it is
+-- fast.
+--
+-- The fourth action argument is called when a file is sent as chunks.
+-- Chucking is inevitable if the socket is non-blocking (this is the
+-- default) and the file is large. The action is called after a chunk
+-- is sent and bofore waiting the socket to be ready for writing.
+
+sendfileFdWithHeader :: Socket -> Fd -> FileRange -> IO () -> [ByteString] -> IO ()
+sendfileFdWithHeader sock fd range hook hdr =
+    alloca $ \sentp ->
         if isFreeBSD && hlen >= 8192 then do
             -- If the length of the header is larger than 8191,
             -- threadWaitWrite does not come back on FreeBSD, sigh.
             -- We use writev() for the header and sendfile() for the file.
             sendMany sock hdr
-            sendfile sock path range hook
+            sendfileFd sock fd range hook
           else do
             -- On MacOS, the header and the body are sent separately.
             -- But it's fast. the writev() and sendfile() combination
@@ -105,8 +144,6 @@ sendfileWithHeader sock path range hook hdr =
                     threadWaitWrite dst
                     sendloop dst fd newoff newlen sentp hook
   where
-    setup = openFd path ReadOnly Nothing defaultFileFlags
-    teardown = closeFd
     dst = Fd $ fdSocket sock
     hlen = fromIntegral . sum . map BS.length $ hdr
 
