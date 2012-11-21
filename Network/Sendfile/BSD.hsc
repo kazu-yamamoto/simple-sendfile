@@ -74,7 +74,9 @@ sendloop dst src off len sentp hook = do
         if errno `elem` [eAGAIN, eINTR] then do
             sent <- peek sentp
             hook
-            threadWaitWrite dst
+            -- Parallel IO manager use edge-trigger mode.
+            -- So, calling threadWaitWrite only when errnor is eAGAIN.
+            when (errno == eAGAIN) $ threadWaitWrite dst
             let newoff = off + sent
                 newlen = if len == entire then entire else len - sent
             sendloop dst src newoff newlen sentp hook
@@ -163,7 +165,9 @@ sendloopHeader dst src off len sentp hdr hlen = do
                   else
                     return $ Just (newoff, len - sent)
               else do
-                threadWaitWrite dst
+                -- Parallel IO manager use edge-trigger mode.
+                -- So, calling threadWaitWrite only when errnor is eAGAIN.
+                when (errno == eAGAIN) $ threadWaitWrite dst
                 let newlen = if len == entire then entire else len - sent
                     newhdr = remainingChunks (fromIntegral sent) hdr
                     newhlen = hlen - sent
