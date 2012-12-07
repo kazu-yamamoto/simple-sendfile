@@ -1,11 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module SendfileSpec where
+module Main where
 
 import Control.Concurrent
 import Control.Exception
 import Control.Monad
-import Data.ByteString.Char8 as BS
+import Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as BS
 import Data.Conduit
 import Data.Conduit.Binary as CB
 import Data.Conduit.List as CL
@@ -23,10 +24,16 @@ import Test.Hspec
 
 ----------------------------------------------------------------
 
+main :: IO ()
+main = do
+    setup0
+    hspec spec
+
 spec :: Spec
 spec = do
     describe "sendfile" $ do
         it "sends an entire file" $ do
+            setup0
             sendFile EntireFile `shouldReturn` ExitSuccess
         it "sends a part of file" $ do
             sendFile (PartOfFile 2000 1000000) `shouldReturn` ExitSuccess
@@ -215,3 +222,30 @@ sinkAppendFile :: MonadResource m
                   => FilePath
                   -> Sink ByteString m ()
 sinkAppendFile fp = sinkIOHandle (openBinaryFile fp AppendMode)
+
+----------------------------------------------------------------
+
+srcFile :: String
+srcFile = "/usr/share/dict/words"
+
+dstFile :: String
+dstFile = "test/inputFile"
+
+setup0 :: IO ()
+setup0 = do
+    dst <- doesFileExist dstFile
+    unless dst $ do
+        src <- doesFileExist srcFile
+        if src then do
+            size <- getFileSize srcFile
+            if size >= 1000000 then
+                copyFile srcFile dstFile
+              else
+                failure
+          else
+            failure
+  where
+    getFileSize file = bracket (openFile file ReadMode) hClose hFileSize
+    failure = do
+        hPutStrLn stderr "You must copy a large file (> 1000000 bytes) to \"test/inputFile\"."
+        exitFailure
