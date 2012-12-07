@@ -104,6 +104,7 @@ sendloop dst src offp len hook = do
         hook
         -- Parallel IO manager use edge-trigger mode.
         -- So, calling threadWaitWrite only when errnor is eAGAIN.
+        errno <- getErrno
         when (errno == eAGAIN) $ threadWaitWrite dst
         sendloop dst src offp left hook
 
