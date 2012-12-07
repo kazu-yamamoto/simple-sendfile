@@ -11,7 +11,6 @@ Description:            Cross platform library for the sendfile system call.
 Category:               Network
 Cabal-Version:          >= 1.10
 Build-Type:             Simple
-Extra-Source-Files:     test/setup.sh
 
 Library
   Default-Language:     Haskell2010
