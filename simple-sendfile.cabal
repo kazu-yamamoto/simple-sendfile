@@ -46,8 +46,9 @@ Test-Suite spec
   Type:                 exitcode-stdio-1.0
   Default-Language:     Haskell2010
   Hs-Source-Dirs:       test
-  Main-Is:              SendfileSpec.hs
+  Main-Is:              Spec.hs
   GHC-Options:          -Wall
+  Other-Modules:        SendfileSpec
   Build-Depends:        base
                       , HUnit
                       , bytestring
