@@ -88,25 +88,22 @@ sendfileFd sock fd range hook =
 
 sendloop :: Fd -> Fd -> Ptr COff -> CSize -> IO () -> IO ()
 sendloop dst src offp len hook = do
+    -- Multicore IO manager use edge-trigger mode.
+    -- So, calling threadWaitWrite only when errnor is eAGAIN.
     bytes <- c_sendfile dst src offp len
     case bytes of
         -1 -> do
             errno <- getErrno
             if errno == eAGAIN then
-                loop len
+                threadWaitWrite dst
+                sendloop dst src offp len hook
               else
                 throwErrno "Network.SendFile.Linux.sendloop"
         0  -> return () -- the file is truncated
-        _  -> loop (len - fromIntegral bytes)
-  where
-    loop 0    = return ()
-    loop left = do
-        hook
-        -- Parallel IO manager use edge-trigger mode.
-        -- So, calling threadWaitWrite only when errnor is eAGAIN.
-        errno <- getErrno
-        when (errno == eAGAIN) $ threadWaitWrite dst
-        sendloop dst src offp left hook
+        _  -> do
+            hook
+            let left = len - fromIntegral bytes
+            when (left /= 0) $ sendloop dst src offp left hook
 
 -- Dst Src in order. take care
 foreign import ccall unsafe "sendfile"
