@@ -94,7 +94,7 @@ sendloop dst src offp len hook = do
     case bytes of
         -1 -> do
             errno <- getErrno
-            if errno == eAGAIN then
+            if errno == eAGAIN then do
                 threadWaitWrite dst
                 sendloop dst src offp len hook
               else
