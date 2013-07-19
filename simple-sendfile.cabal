@@ -12,6 +12,10 @@ Category:               Network
 Cabal-Version:          >= 1.10
 Build-Type:             Simple
 
+Flag allow-bsd
+  Description:          Allow use of BSD sendfile (disable on GNU/kFreeBSD)
+  Default:              True
+
 Library
   Default-Language:     Haskell2010
   GHC-Options:          -Wall
@@ -21,7 +25,7 @@ Library
                       , network
                       , bytestring
   -- NetBSD and OpenBSD don't have sendfile
-  if os(freebsd)
+  if os(freebsd) && flag(allow-bsd)
     CPP-Options:        -DOS_BSD
     Other-Modules:      Network.Sendfile.BSD
                         Network.Sendfile.IOVec
