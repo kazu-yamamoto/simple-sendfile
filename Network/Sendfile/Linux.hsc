@@ -11,17 +11,17 @@ import Control.Applicative
 import Control.Exception
 import Control.Monad
 import Data.ByteString as B
-import Data.ByteString.Unsafe
+import Data.ByteString.Internal
 import Data.Int
 import Foreign.C.Error (eAGAIN, getErrno, throwErrno)
 import Foreign.C.Types
 import Foreign.Marshal (alloca)
-import Foreign.Ptr (Ptr)
+import Foreign.Ptr (Ptr, plusPtr, castPtr)
+import Foreign.ForeignPtr
 import Foreign.Storable (poke)
 import GHC.Conc (threadWaitWrite)
 import Network.Sendfile.Types
 import Network.Socket
-import Network.Socket.Internal (throwSocketErrorIfMinus1RetryMayBlock)
 import System.Posix.Files
 import System.Posix.IO
 import System.Posix.Types
@@ -78,16 +78,16 @@ sendfileFd sock fd range hook =
             -- System call is very slow. Use PartOfFile instead.
             len <- fileSize <$> getFdStatus fd
             let len' = fromIntegral len
-            sendloop dst fd offp len' hook
+            sendfileloop dst fd offp len' hook
         PartOfFile off len -> do
             poke offp (fromIntegral off)
             let len' = fromIntegral len
-            sendloop dst fd offp len' hook
+            sendfileloop dst fd offp len' hook
   where
     dst = Fd $ fdSocket sock
 
-sendloop :: Fd -> Fd -> Ptr COff -> CSize -> IO () -> IO ()
-sendloop dst src offp len hook = do
+sendfileloop :: Fd -> Fd -> Ptr COff -> CSize -> IO () -> IO ()
+sendfileloop dst src offp len hook = do
     -- Multicore IO manager use edge-trigger mode.
     -- So, calling threadWaitWrite only when errnor is eAGAIN.
     bytes <- c_sendfile dst src offp len
@@ -96,14 +96,14 @@ sendloop dst src offp len hook = do
             errno <- getErrno
             if errno == eAGAIN then do
                 threadWaitWrite dst
-                sendloop dst src offp len hook
+                sendfileloop dst src offp len hook
               else
-                throwErrno "Network.SendFile.Linux.sendloop"
+                throwErrno "Network.SendFile.Linux.sendfileloop"
         0  -> return () -- the file is truncated
         _  -> do
             hook
             let left = len - fromIntegral bytes
-            when (left /= 0) $ sendloop dst src offp left hook
+            when (left /= 0) $ sendfileloop dst src offp left hook
 
 -- Dst Src in order. take care
 foreign import ccall unsafe "sendfile"
@@ -134,7 +134,7 @@ foreign import ccall unsafe "sendfile"
 sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
 sendfileWithHeader sock path range hook hdr = do
     -- Copying is much faster than syscall.
-    sendAllMsgMore sock $ B.concat hdr
+    sendMsgMore sock $ B.concat hdr
     sendfile sock path range hook
 
 -- |
@@ -160,21 +160,34 @@ sendfileWithHeader sock path range hook hdr = do
 sendfileFdWithHeader :: Socket -> Fd -> FileRange -> IO () -> [ByteString] -> IO ()
 sendfileFdWithHeader sock fd range hook hdr = do
     -- Copying is much faster than syscall.
-    sendAllMsgMore sock $ B.concat hdr
+    sendMsgMore sock $ B.concat hdr
     sendfileFd sock fd range hook
 
-sendAllMsgMore :: Socket -> ByteString -> IO ()
-sendAllMsgMore sock bs = do
-    sent <- sendMsgMore sock bs
-    when (sent < B.length bs) $ sendAllMsgMore sock (B.drop sent bs)
+sendMsgMore :: Socket -> ByteString -> IO ()
+sendMsgMore sock bs = withForeignPtr fptr $ \ptr -> do
+    let buf = castPtr (ptr `plusPtr` off)
+        siz = fromIntegral len
+    sendloop s buf siz
+  where
+    MkSocket s _ _ _ _ = sock
+    PS fptr off len = bs
 
-sendMsgMore :: Socket -> ByteString -> IO Int
-sendMsgMore (MkSocket s _ _ _ _) xs =
-    unsafeUseAsCStringLen xs $ \(str, len) ->
-    fromIntegral <$> throwSocketErrorIfMinus1RetryMayBlock
-                         "sendMsgMore"
-                         (threadWaitWrite (fromIntegral s))
-                         (c_send s str (fromIntegral len) (#const MSG_MORE))
+sendloop :: CInt -> Ptr CChar -> CSize -> IO ()
+sendloop s buf len = do
+    bytes <- c_send s buf len (#const MSG_MORE)
+    if bytes == -1 then do
+        errno <- getErrno
+        if errno == eAGAIN then do
+            threadWaitWrite (Fd s)
+            sendloop s buf len
+          else
+            throwErrno "Network.SendFile.Linux.sendloop"
+      else do
+        let sent = fromIntegral bytes
+        when (sent /= len) $ do
+            let left = len - sent
+                ptr = buf `plusPtr` fromIntegral bytes
+            sendloop s ptr left
 
 foreign import ccall unsafe "send"
   c_send :: CInt -> Ptr CChar -> CSize -> CInt -> IO (#type ssize_t)
