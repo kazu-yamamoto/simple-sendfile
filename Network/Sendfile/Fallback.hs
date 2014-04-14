@@ -12,6 +12,7 @@ import Network.Sendfile.Types
 import Network.Socket
 import Network.Socket.ByteString
 import qualified Network.Socket.ByteString as SB
+import Control.Monad.Trans.Resource (runResourceT)
 
 -- |
 -- Sendfile emulation using conduit.
