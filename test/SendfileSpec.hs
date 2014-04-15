@@ -5,6 +5,7 @@ module SendfileSpec where
 import Control.Concurrent
 import Control.Exception
 import Control.Monad
+import Control.Monad.Trans.Resource (MonadResource, runResourceT)
 import Data.ByteString.Char8 as BS
 import Data.Conduit
 import Data.Conduit.Binary as CB
