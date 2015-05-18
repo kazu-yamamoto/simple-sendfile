@@ -18,7 +18,7 @@ import Foreign.C.Types
 import Foreign.Marshal (alloca)
 import Foreign.Ptr (Ptr, plusPtr, castPtr)
 import Foreign.ForeignPtr
-import Foreign.Storable (poke)
+import Foreign.Storable (poke, sizeOf)
 import GHC.Conc (threadWaitWrite)
 import Network.Sendfile.Types
 import Network.Socket
@@ -28,6 +28,11 @@ import System.Posix.Types
 
 #include <sys/sendfile.h>
 #include <sys/socket.h>
+
+safeSize :: CSize
+safeSize
+  | sizeOf (0 :: CSize) == 8 = 2^(60 :: Int)
+  | otherwise                = 2^(30 :: Int)
 
 ----------------------------------------------------------------
 
@@ -90,7 +95,10 @@ sendfileloop :: Fd -> Fd -> Ptr COff -> CSize -> IO () -> IO ()
 sendfileloop dst src offp len hook = do
     -- Multicore IO manager use edge-trigger mode.
     -- So, calling threadWaitWrite only when errnor is eAGAIN.
-    bytes <- c_sendfile dst src offp len
+    let toSend
+          | len > safeSize = safeSize
+          | otherwise      = len
+    bytes <- c_sendfile dst src offp toSend
     case bytes of
         -1 -> do
             errno <- getErrno
