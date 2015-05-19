@@ -10,13 +10,23 @@ Description:            Cross platform library for the sendfile system call.
                         are the bottleneck of web servers.
 Category:               Network
 Cabal-Version:          >= 1.10
-Build-Type:             Simple
+Build-Type:             Configure
+
+extra-source-files:
+                config.guess config.sub install-sh
+                configure.ac configure
+                Network/Sendfile/HsConfig.h.in
+extra-tmp-files:
+                config.log config.status autom4te.cache
+                Network/Sendfile/HsConfig.h
 
 Flag allow-bsd
   Description:          Allow use of BSD sendfile (disable on GNU/kFreeBSD)
   Default:              True
 
 Library
+  include-dirs: Network/Sendfile
+  includes:     HsConfig.h
   Default-Language:     Haskell2010
   GHC-Options:          -Wall
   Exposed-Modules:      Network.Sendfile

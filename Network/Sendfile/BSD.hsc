@@ -24,6 +24,7 @@ import Network.Socket.ByteString
 import System.Posix.IO
 import System.Posix.Types
 
+#include "HsConfig.h"
 #include <sys/types.h>
 
 entire :: COff

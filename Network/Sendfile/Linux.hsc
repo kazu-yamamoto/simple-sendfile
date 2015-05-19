@@ -26,6 +26,7 @@ import System.Posix.Files
 import System.Posix.IO
 import System.Posix.Types
 
+#include "HsConfig.h"
 #include <sys/sendfile.h>
 #include <sys/socket.h>
 

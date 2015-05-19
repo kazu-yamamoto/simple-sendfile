@@ -18,6 +18,7 @@ import Foreign.Marshal.Array (allocaArray)
 import Foreign.Ptr (Ptr, nullPtr, plusPtr)
 import Foreign.Storable (Storable(..))
 
+#include "HsConfig.h"
 #include <sys/uio.h>
 #include <sys/socket.h>
 
