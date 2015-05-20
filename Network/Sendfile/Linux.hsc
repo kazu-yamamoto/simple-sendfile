@@ -29,10 +29,13 @@ import System.Posix.Types
 #include <sys/sendfile.h>
 #include <sys/socket.h>
 
+isLargeOffset :: Bool
+isLargeOffset = sizeOf (0 :: CSize) == 8
+
 safeSize :: CSize
 safeSize
-  | sizeOf (0 :: CSize) == 8 = 2^(60 :: Int)
-  | otherwise                = 2^(30 :: Int)
+  | isLargeOffset = 2^(60 :: Int)
+  | otherwise     = 2^(30 :: Int)
 
 ----------------------------------------------------------------
 
@@ -115,7 +118,15 @@ sendfileloop dst src offp len hook = do
 
 -- Dst Src in order. take care
 foreign import ccall unsafe "sendfile"
-    c_sendfile :: Fd -> Fd -> Ptr COff -> CSize -> IO (#type ssize_t)
+    c_sendfile32 :: Fd -> Fd -> Ptr COff -> CSize -> IO (#type ssize_t)
+
+foreign import ccall unsafe "sendfile64"
+    c_sendfile64 :: Fd -> Fd -> Ptr COff -> CSize -> IO (#type ssize_t)
+
+c_sendfile :: Fd -> Fd -> Ptr COff -> CSize -> IO (#type ssize_t)
+c_sendfile
+  | isLargeOffset = c_sendfile64
+  | otherwise     = c_sendfile32
 
 ----------------------------------------------------------------
 
