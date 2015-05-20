@@ -30,12 +30,15 @@ import System.Posix.Types
 #include <sys/socket.h>
 
 isLargeOffset :: Bool
-isLargeOffset = sizeOf (0 :: CSize) == 8
+isLargeOffset = sizeOf (0 :: COff) == 8
+
+isLargeSize :: Bool
+isLargeSize = sizeOf (0 :: CSize) == 8
 
 safeSize :: CSize
 safeSize
-  | isLargeOffset = 2^(60 :: Int)
-  | otherwise     = 2^(30 :: Int)
+  | isLargeSize = 2^(60 :: Int)
+  | otherwise   = 2^(30 :: Int)
 
 ----------------------------------------------------------------
 
