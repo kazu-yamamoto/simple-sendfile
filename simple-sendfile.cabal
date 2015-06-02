@@ -51,6 +51,7 @@ Library
         CPP-Options:    -DOS_Linux
         Other-Modules:  Network.Sendfile.Linux
         Build-Depends:  unix
+        c-sources:      Network/Sendfile/lnxsendfile.c
       else
         Other-Modules:  Network.Sendfile.Fallback
         Build-Depends:  conduit         >= 1.0 && < 1.3

@@ -115,7 +115,7 @@ sendfileloop dst src offp len hook = do
             when (left /= 0) $ sendfileloop dst src offp left hook
 
 -- Dst Src in order. take care
-foreign import ccall unsafe "sendfile"
+foreign import ccall unsafe "lnxsendfile"
     c_sendfile :: Fd -> Fd -> Ptr COff -> CSize -> IO (#type ssize_t)
 
 ----------------------------------------------------------------
