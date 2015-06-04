@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module SendfileSpec where
+module Main where
 
 import Control.Concurrent
 import Control.Exception
@@ -17,15 +17,30 @@ import Network.Socket
 import System.Directory
 import System.Exit
 import System.IO
+import System.Posix.IO
+import System.Posix.Types
 import System.Posix.Files
 import System.Process
 import System.Timeout
+import Foreign.Marshal.Alloc
+import Data.Word
+import Foreign.Ptr
+import Foreign.C.Types
+import Foreign.C.String
 import Test.Hspec
 
 ----------------------------------------------------------------
 
-spec :: Spec
-spec = do
+main :: IO ()
+main = bracket
+  (openFd verybigFile ReadWrite (Just 384) defaultFileFlags)
+  (\fd -> closeFd fd >> removeLink verybigFile)
+  (\fd -> hspec (spec fd))
+    where
+      verybigFile = "test/verybigFile"
+
+spec :: Fd -> Spec
+spec fd = do
     describe "sendfile" $ do
         it "sends an entire file" $ do
             sendFile EntireFile `shouldReturn` ExitSuccess
@@ -52,9 +67,38 @@ spec = do
             shouldTerminate $ sendIllegalH (PartOfFile 5000000 6000000)
         it "terminates even if the file is truncated" $ do
             shouldTerminate truncateFileH
+    describe "sendVeryBigFile" $ do
+        it "seeks to position 0" $ do
+            fdSeek fd AbsoluteSeek 0 `shouldReturn` 0
+        it "writes \"begin\\n\" at this offset" $ do
+            fdWrite fd "begin\n" `shouldReturn` 6
+        it ("seeks to position " ++ show eoff) $ do
+            fdSeek fd AbsoluteSeek eoff `shouldReturn` eoff
+        it "writes \"end\\n\" at this offset" $ do
+            fdWrite fd "end\n" `shouldReturn` 4
+        it ("produces a file of " ++ show maxs ++ " bytes as a result") $ do
+            (fileSize `fmap` getFdStatus fd) `shouldReturn` maxs
+        it "seeks again to position 0" $ do
+            fdSeek fd AbsoluteSeek 0 `shouldReturn` 0
+        it "reads \"begin\\n\" at this offset" $ do
+            fdRead fd 6 `shouldReturn` ("begin\n", 6)
+        it ("seeks again to position " ++ show eoff) $ do
+            fdSeek fd AbsoluteSeek eoff `shouldReturn` eoff
+        it "reads \"end\\n\" at this offset" $ do
+            fdRead fd 4 `shouldReturn` ("end\n", 4)
+        it "runs \"sendfile\" at 0 and checks data" $ do
+            sendRecv fd 0 6 `shouldReturn` ("begin\n", 6)
+        it ("runs \"sendfile\" at " ++ show eoff ++ " and checks data") $ do
+            sendRecv fd eoff 4 `shouldReturn` ("end\n", 4)
+        it ("runs \"sendfile\" for " ++ show bc32 ++ " bytes") $ do
+            sendRecv fd fo32 bc32 `shouldReturn` ("", bc32)
   where
     fiveSecs = 5000000
     shouldTerminate body = timeout fiveSecs body `shouldReturn` Just ()
+    maxs = 2^33-1
+    eoff = maxs-4
+    fo32 = 2^32-1 :: FileOffset
+    bc32 = 2^32-1 :: ByteCount
 
 ----------------------------------------------------------------
 
@@ -216,3 +260,36 @@ sinkAppendFile :: MonadResource m
                   => FilePath
                   -> Sink ByteString m ()
 sinkAppendFile fp = sinkIOHandle (openBinaryFile fp AppendMode)
+
+----------------------------------------------------------------
+
+sendRecv :: Fd -> FileOffset -> ByteCount -> IO (String, ByteCount)
+sendRecv fd off size =
+  bracket setup teardown (\x -> rcv x size 0 "" `catch` handler)
+  where
+    setup = do
+      (s1,s2) <- socketPair AF_UNIX Stream 0
+      tid <- forkIO (sendfileFd s1 fd
+                                (PartOfFile (toInteger off) (toInteger size))
+                                (return ()) `finally` sClose s1)
+      buf <- mallocBytes 4096 :: IO (Ptr Word8)
+      return (s2, tid, buf)
+    teardown (s2, tid, buf) = do
+      sClose s2
+      killThread tid
+      free buf
+    rcv (s2, _, buf) sz got pfx = do
+      rsize <- recvBuf s2 buf 4096
+      let rlen = fromIntegral rsize :: ByteCount
+      rstr <- peekCStringLen (castPtr buf :: Ptr CChar, 8)
+      let npfx = if got == 0
+                 then Prelude.filter (/= '\0') $
+                      Prelude.take (min (fromIntegral sz) 8) rstr
+                 else pfx
+      -- Not sure why this `seq` is necessary but it is!
+      got `seq` if rlen == sz || rlen <= 0
+        then return (npfx, got + rlen)
+        else rcv (s2, undefined, buf) (sz - rlen) (got + rlen) npfx
+    handler :: IOException -> IO (String, ByteCount)
+    handler e = return (show e, (-1))
+
