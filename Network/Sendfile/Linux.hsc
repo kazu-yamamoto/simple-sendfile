@@ -30,10 +30,8 @@ import System.Posix.Types
 #include <sys/sendfile.h>
 #include <sys/socket.h>
 
-safeSize :: CSize
-safeSize
-  | sizeOf (0 :: CSize) == 8 = 2^(60 :: Int)
-  | otherwise                = 2^(30 :: Int)
+safeSize :: Integer -- Maximum positive Integer that fits in CSize
+safeSize = 2^((sizeOf (0 :: CSize)) * 8 - 1) - 1
 
 ----------------------------------------------------------------
 
@@ -83,23 +81,21 @@ sendfileFd sock fd range hook =
             poke offp 0
             -- System call is very slow. Use PartOfFile instead.
             len <- fileSize <$> getFdStatus fd
-            let len' = fromIntegral len
-            sendfileloop dst fd offp len' hook
+            sendfileloop dst fd offp (toInteger len) hook
         PartOfFile off len -> do
             poke offp (fromIntegral off)
-            let len' = fromIntegral len
-            sendfileloop dst fd offp len' hook
+            sendfileloop dst fd offp len hook
   where
     dst = Fd $ fdSocket sock
 
-sendfileloop :: Fd -> Fd -> Ptr COff -> CSize -> IO () -> IO ()
+sendfileloop :: Fd -> Fd -> Ptr COff -> Integer -> IO () -> IO ()
 sendfileloop dst src offp len hook = do
     -- Multicore IO manager use edge-trigger mode.
     -- So, calling threadWaitWrite only when errnor is eAGAIN.
     let toSend
           | len > safeSize = safeSize
           | otherwise      = len
-    bytes <- c_sendfile dst src offp toSend
+    bytes <- c_sendfile dst src offp (fromIntegral toSend)
     case bytes of
         -1 -> do
             errno <- getErrno
