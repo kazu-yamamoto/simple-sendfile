@@ -191,16 +191,16 @@ sendMsgMore sock bs = withForeignPtr fptr $ \ptr -> do
         siz = fromIntegral len
     sendloop s buf siz
   where
-    MkSocket s _ _ _ _ = sock
+    s = Fd $ fdSocket sock
     PS fptr off len = bs
 
-sendloop :: CInt -> Ptr CChar -> CSize -> IO ()
+sendloop :: Fd -> Ptr CChar -> CSize -> IO ()
 sendloop s buf len = do
     bytes <- c_send s buf len (#const MSG_MORE)
     if bytes == -1 then do
         errno <- getErrno
         if errno == eAGAIN then do
-            threadWaitWrite (Fd s)
+            threadWaitWrite s
             sendloop s buf len
           else
             throwErrno "Network.SendFile.Linux.sendloop"
@@ -212,4 +212,4 @@ sendloop s buf len = do
             sendloop s ptr left
 
 foreign import ccall unsafe "send"
-  c_send :: CInt -> Ptr CChar -> CSize -> CInt -> IO CSsize
+  c_send :: Fd -> Ptr CChar -> CSize -> CInt -> IO CSsize
