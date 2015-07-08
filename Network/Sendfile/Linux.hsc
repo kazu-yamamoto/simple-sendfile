@@ -121,12 +121,12 @@ sendfileloop dst src offp len hook = do
 
 -- Dst Src in order. take care
 foreign import ccall unsafe "sendfile"
-    c_sendfile32 :: Fd -> Fd -> Ptr COff -> CSize -> IO (#type ssize_t)
+    c_sendfile32 :: Fd -> Fd -> Ptr COff -> CSize -> IO CSsize
 
 foreign import ccall unsafe "sendfile64"
-    c_sendfile64 :: Fd -> Fd -> Ptr COff -> CSize -> IO (#type ssize_t)
+    c_sendfile64 :: Fd -> Fd -> Ptr COff -> CSize -> IO CSsize
 
-c_sendfile :: Fd -> Fd -> Ptr COff -> CSize -> IO (#type ssize_t)
+c_sendfile :: Fd -> Fd -> Ptr COff -> CSize -> IO CSsize
 c_sendfile
   | isLargeOffset = c_sendfile64
   | otherwise     = c_sendfile32
@@ -212,4 +212,4 @@ sendloop s buf len = do
             sendloop s ptr left
 
 foreign import ccall unsafe "send"
-  c_send :: CInt -> Ptr CChar -> CSize -> CInt -> IO (#type ssize_t)
+  c_send :: CInt -> Ptr CChar -> CSize -> CInt -> IO CSsize
