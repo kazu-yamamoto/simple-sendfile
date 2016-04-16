@@ -39,7 +39,11 @@ Library
     else
       if os(linux)
         CPP-Options:    -DOS_Linux
+        Exposed-Modules: System.Posix.IO.Sendfile
+                         System.Posix.IO.Sendfile.ByteString
+                         System.Posix.IO.Sendfile.Types
         Other-Modules:  Network.Sendfile.Linux
+                        System.Posix.IO.Sendfile.Internal
         Build-Depends:  unix
       else
         Other-Modules:  Network.Sendfile.Fallback
@@ -67,6 +71,9 @@ Test-Suite spec
                       , process
                       , simple-sendfile
                       , unix
+  if os(linux)
+      Other-Modules:  PosixSendfileSpec
+
 
 Source-Repository head
   Type:                 git
