@@ -39,6 +39,7 @@ Library
     else
       if os(linux)
         CPP-Options:    -DOS_Linux
+        Exposed-Modules: System.Linux.Sendfile
         Other-Modules:  Network.Sendfile.Linux
         Build-Depends:  unix
       else

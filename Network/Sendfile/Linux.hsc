@@ -68,22 +68,6 @@ sendfile sock path range hook = bracket setup teardown $ \fd ->
     setup = openFd path ReadOnly Nothing defaultFileFlags{nonBlock=True}
     teardown = closeFd
 
--- |
--- Simple binding for sendfile() of Linux.
--- Used system calls:
---
---  - EntireFile -- open(), stat(), sendfile(), and close()
---
---  - PartOfFile -- open(), sendfile(), and close()
---
--- If the size of the file is unknown when sending the entire file,
--- specifying PartOfFile is much faster.
---
--- The fourth action argument is called when a file is sent as chunks.
--- Chucking is inevitable if the socket is non-blocking (this is the
--- default) and the file is large. The action is called after a chunk
--- is sent and bofore waiting the socket to be ready for writing.
-
 sendfile' :: Fd -> ByteString -> FileRange -> IO () -> IO ()
 sendfile' dst path range hook = bracket setup teardown $ \src ->
     sendfileFd' dst src range hook
@@ -111,21 +95,6 @@ sendfileFd sock fd range hook = sendfileFd' dst fd range hook
   where
     dst = Fd $ fdSocket sock
 
--- |
--- Simple binding for sendfile() of Linux.
--- Used system calls:
---
---  - EntireFile -- stat() and sendfile()
---
---  - PartOfFile -- sendfile()
---
--- If the size of the file is unknown when sending the entire file,
--- specifying PartOfFile is much faster.
---
--- The fourth action argument is called when a file is sent as chunks.
--- Chucking is inevitable if the socket is non-blocking (this is the
--- default) and the file is large. The action is called after a chunk
--- is sent and bofore waiting the socket to be ready for writing.
 sendfileFd' :: Fd -> Fd -> FileRange -> IO () -> IO ()
 sendfileFd' dst src range hook =
     alloca $ \offp -> case range of

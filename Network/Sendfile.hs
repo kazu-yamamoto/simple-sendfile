@@ -13,10 +13,6 @@ module Network.Sendfile (
   , sendfileFd
   , sendfileFdWithHeader
 #endif
-#if OS_Linux
-  , sendfile'
-  , sendfileFd'
-#endif
   , FileRange(..)
   ) where
 
