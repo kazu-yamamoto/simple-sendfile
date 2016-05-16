@@ -2,7 +2,9 @@
 
 module Network.Sendfile.Linux (
     sendfile
+  , sendfile'
   , sendfileFd
+  , sendfileFd'
   , sendfileWithHeader
   , sendfileFdWithHeader
   ) where
@@ -24,6 +26,7 @@ import Network.Sendfile.Types
 import Network.Socket
 import System.Posix.Files
 import System.Posix.IO
+import qualified System.Posix.IO.ByteString as B
 import System.Posix.Types
 
 #include <sys/sendfile.h>
@@ -65,6 +68,13 @@ sendfile sock path range hook = bracket setup teardown $ \fd ->
     setup = openFd path ReadOnly Nothing defaultFileFlags{nonBlock=True}
     teardown = closeFd
 
+sendfile' :: Fd -> ByteString -> FileRange -> IO () -> IO ()
+sendfile' dst path range hook = bracket setup teardown $ \src ->
+    sendfileFd' dst src range hook
+  where
+    setup = B.openFd path ReadOnly Nothing defaultFileFlags{nonBlock=True}
+    teardown = closeFd
+
 -- |
 -- Simple binding for sendfile() of Linux.
 -- Used system calls:
@@ -80,22 +90,24 @@ sendfile sock path range hook = bracket setup teardown $ \fd ->
 -- Chucking is inevitable if the socket is non-blocking (this is the
 -- default) and the file is large. The action is called after a chunk
 -- is sent and bofore waiting the socket to be ready for writing.
-
 sendfileFd :: Socket -> Fd -> FileRange -> IO () -> IO ()
-sendfileFd sock fd range hook =
+sendfileFd sock fd range hook = sendfileFd' dst fd range hook
+  where
+    dst = Fd $ fdSocket sock
+
+sendfileFd' :: Fd -> Fd -> FileRange -> IO () -> IO ()
+sendfileFd' dst src range hook =
     alloca $ \offp -> case range of
         EntireFile -> do
             poke offp 0
             -- System call is very slow. Use PartOfFile instead.
-            len <- fileSize <$> getFdStatus fd
+            len <- fileSize <$> getFdStatus src
             let len' = fromIntegral len
-            sendfileloop dst fd offp len' hook
+            sendfileloop dst src offp len' hook
         PartOfFile off len -> do
             poke offp (fromIntegral off)
             let len' = fromIntegral len
-            sendfileloop dst fd offp len' hook
-  where
-    dst = Fd $ fdSocket sock
+            sendfileloop dst src offp len' hook
 
 sendfileloop :: Fd -> Fd -> Ptr COff -> CSize -> IO () -> IO ()
 sendfileloop dst src offp len hook = do
