@@ -1,6 +1,7 @@
 module System.Linux.Sendfile (
     sendfile
   , sendfileFd
+  , FileRange(..)
   ) where
 
 import Data.ByteString (ByteString)
