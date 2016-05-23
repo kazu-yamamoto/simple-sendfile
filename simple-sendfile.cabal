@@ -12,6 +12,8 @@ Category:               Network
 Cabal-Version:          >= 1.10
 Build-Type:             Simple
 
+Extra-source-files:     test/inputFile
+
 Flag allow-bsd
   Description:          Allow use of BSD sendfile (disable on GNU/kFreeBSD)
   Default:              True
