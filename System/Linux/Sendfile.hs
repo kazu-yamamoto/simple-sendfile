@@ -6,7 +6,7 @@ module System.Linux.Sendfile (
 
 import Data.ByteString (ByteString)
 import Network.Sendfile.Linux (sendfile', sendfileFd')
-import Network.Sendfile.Types (FileRange)
+import Network.Sendfile.Types (FileRange(..))
 import System.Posix.Types (Fd)
 
 -- |
