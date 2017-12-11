@@ -110,9 +110,9 @@ sendFileCore range headers = bracket setup teardown $ \(s2,_) -> do
         sf s1
           | headers == [] = sendfile s1 inputFile range (return ())
           | otherwise     = sendfileWithHeader s1 inputFile range (return ()) headers
-        sendEOF = sClose
+        sendEOF = close
     teardown (s2,tid) = do
-        sClose s2
+        close s2
         killThread tid
         removeFileIfExists outputFile
         removeFileIfExists expectedFile
@@ -150,9 +150,9 @@ sendIllegalCore range headers = bracket setup teardown $ \(s2,_) -> do
         sf s1
           | headers == [] = sendfile s1 inputFile range (return ())
           | otherwise     = sendfileWithHeader s1 inputFile range (return ()) headers
-        sendEOF = sClose
+        sendEOF = close
     teardown (s2,tid) = do
-        sClose s2
+        close s2
         killThread tid
         removeFileIfExists outputFile
     inputFile = "test/inputFile"
@@ -190,13 +190,13 @@ truncateFileCore headers = bracket setup teardown $ \(s2,_) -> do
         sf s1 ref
           | headers == [] = sendfile s1 tempFile range (hook ref)
           | otherwise     = sendfileWithHeader s1 tempFile range (hook ref) headers
-        sendEOF = sClose
+        sendEOF = close
         hook ref = do
             n <- readIORef ref
             when (n == 10) $ setFileSize tempFile 900000
             writeIORef ref (n+1)
     teardown (s2,tid) = do
-        sClose s2
+        close s2
         killThread tid
         removeFileIfExists tempFile
         removeFileIfExists outputFile
