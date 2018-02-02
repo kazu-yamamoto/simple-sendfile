@@ -46,8 +46,8 @@ Library
         Build-Depends:  unix
       else
         Other-Modules:  Network.Sendfile.Fallback
-        Build-Depends:  conduit         >= 1.0 && < 1.3
-                      , conduit-extra   >= 1.0 && < 1.3
+        Build-Depends:  conduit         >= 1.0 && < 1.4
+                      , conduit-extra   >= 1.0 && < 1.4
                       , transformers    >= 0.2.2 && < 0.6
                       , resourcet
 
