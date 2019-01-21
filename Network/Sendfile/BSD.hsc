@@ -1,4 +1,5 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE CPP #-}
 
 module Network.Sendfile.BSD (
     sendfile
@@ -57,14 +58,17 @@ sendfile sock path range hook = bracket setup teardown $ \fd ->
 -- is sent and bofore waiting the socket to be ready for writing.
 
 sendfileFd :: Socket -> Fd -> FileRange -> IO () -> IO ()
-sendfileFd sock fd range hook =
+sendfileFd sock fd range hook = do
+#if MIN_VERSION_network(3,0,0)
+    dst <- Fd <$> fdSocket sock
+#else
+    let dst = Fd $ fdSocket sock
+#endif
     alloca $ \sentp -> do
         let (off,len) = case range of
                 EntireFile           -> (0, entire)
                 PartOfFile off' len' -> (fromInteger off', fromInteger len')
         sendloop dst fd off len sentp hook
-  where
-    dst = Fd $ fdSocket sock
 
 sendloop :: Fd -> Fd -> COff -> COff -> Ptr COff -> IO () -> IO ()
 sendloop dst src off len sentp hook = do
@@ -123,7 +127,12 @@ sendfileWithHeader sock path range hook hdr =
 -- is sent and bofore waiting the socket to be ready for writing.
 
 sendfileFdWithHeader :: Socket -> Fd -> FileRange -> IO () -> [ByteString] -> IO ()
-sendfileFdWithHeader sock fd range hook hdr =
+sendfileFdWithHeader sock fd range hook hdr = do
+#if MIN_VERSION_network(3,0,0)
+    dst <- Fd <$> fdSocket sock
+#else
+    let dst = Fd $ fdSocket sock
+#endif
     alloca $ \sentp ->
         if isFreeBSD && hlen >= 8192 then do
             -- If the length of the header is larger than 8191,
@@ -146,7 +155,6 @@ sendfileFdWithHeader sock fd range hook hdr =
                     threadWaitWrite dst
                     sendloop dst fd newoff newlen sentp hook
   where
-    dst = Fd $ fdSocket sock
     hlen = fromIntegral . sum . map BS.length $ hdr
 
 sendloopHeader :: Fd -> Fd -> COff -> COff -> Ptr COff -> [ByteString] -> COff -> IO (Maybe (COff, COff))

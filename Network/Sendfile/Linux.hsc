@@ -1,4 +1,5 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE CPP #-}
 
 module Network.Sendfile.Linux (
     sendfile
@@ -91,9 +92,13 @@ sendfile' dst path range hook = bracket setup teardown $ \src ->
 -- default) and the file is large. The action is called after a chunk
 -- is sent and bofore waiting the socket to be ready for writing.
 sendfileFd :: Socket -> Fd -> FileRange -> IO () -> IO ()
-sendfileFd sock fd range hook = sendfileFd' dst fd range hook
-  where
-    dst = Fd $ fdSocket sock
+sendfileFd sock fd range hook = do
+#if MIN_VERSION_network(3,0,0)
+    dst <- Fd <$> fdSocket sock
+#else
+    let dst = Fd $ fdSocket sock
+#endif
+    sendfileFd' dst fd range hook
 
 sendfileFd' :: Fd -> Fd -> FileRange -> IO () -> IO ()
 sendfileFd' dst src range hook =
@@ -199,11 +204,15 @@ sendfileFdWithHeader sock fd range hook hdr = do
 
 sendMsgMore :: Socket -> ByteString -> IO ()
 sendMsgMore sock bs = withForeignPtr fptr $ \ptr -> do
+#if MIN_VERSION_network(3,0,0)
+    s <- Fd <$> fdSocket sock
+#else
+    let s = Fd $ fdSocket sock
+#endif
     let buf = castPtr (ptr `plusPtr` off)
         siz = fromIntegral len
     sendloop s buf siz
   where
-    s = Fd $ fdSocket sock
     PS fptr off len = bs
 
 sendloop :: Fd -> Ptr CChar -> CSize -> IO ()
