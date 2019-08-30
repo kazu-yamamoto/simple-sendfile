@@ -93,7 +93,10 @@ sendfile' dst path range hook = bracket setup teardown $ \src ->
 -- is sent and bofore waiting the socket to be ready for writing.
 sendfileFd :: Socket -> Fd -> FileRange -> IO () -> IO ()
 sendfileFd sock fd range hook = do
-#if MIN_VERSION_network(3,0,0)
+#if MIN_VERSION_network(3,1,0)
+  withFdSocket sock $ \s -> do
+    let dst = Fd s
+#elif MIN_VERSION_network(3,0,0)
     dst <- Fd <$> fdSocket sock
 #else
     let dst = Fd $ fdSocket sock
@@ -204,7 +207,10 @@ sendfileFdWithHeader sock fd range hook hdr = do
 
 sendMsgMore :: Socket -> ByteString -> IO ()
 sendMsgMore sock bs = withForeignPtr fptr $ \ptr -> do
-#if MIN_VERSION_network(3,0,0)
+#if MIN_VERSION_network(3,1,0)
+  withFdSocket sock $ \fd -> do
+    let s = Fd fd
+#elif MIN_VERSION_network(3,0,0)
     s <- Fd <$> fdSocket sock
 #else
     let s = Fd $ fdSocket sock

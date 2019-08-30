@@ -59,7 +59,10 @@ sendfile sock path range hook = bracket setup teardown $ \fd ->
 
 sendfileFd :: Socket -> Fd -> FileRange -> IO () -> IO ()
 sendfileFd sock fd range hook = do
-#if MIN_VERSION_network(3,0,0)
+#if MIN_VERSION_network(3,1,0)
+  withFdSocket sock $ \s -> do
+    let dst = Fd s
+#elif MIN_VERSION_network(3,0,0)
     dst <- Fd <$> fdSocket sock
 #else
     let dst = Fd $ fdSocket sock
@@ -128,7 +131,10 @@ sendfileWithHeader sock path range hook hdr =
 
 sendfileFdWithHeader :: Socket -> Fd -> FileRange -> IO () -> [ByteString] -> IO ()
 sendfileFdWithHeader sock fd range hook hdr = do
-#if MIN_VERSION_network(3,0,0)
+#if MIN_VERSION_network(3,1,0)
+  withFdSocket sock $ \s -> do
+    let dst = Fd s
+#elif MIN_VERSION_network(3,0,0)
     dst <- Fd <$> fdSocket sock
 #else
     let dst = Fd $ fdSocket sock
