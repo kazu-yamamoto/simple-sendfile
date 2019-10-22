@@ -22,7 +22,7 @@ import Network.Sendfile.IOVec
 import Network.Sendfile.Types
 import Network.Socket
 import Network.Socket.ByteString
-import System.Posix.IO
+import System.Posix.IO (OpenMode(..), OpenFileFlags(..))
 import System.Posix.Types
 
 #include <sys/types.h>
@@ -44,7 +44,7 @@ sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
 sendfile sock path range hook = bracket setup teardown $ \fd ->
     sendfileFd sock fd range hook
   where
-    setup = openFd path ReadOnly Nothing defaultFileFlags{nonBlock=True}
+    setup = openFd path ReadOnly defaultFileFlags{nonBlock=True}
     teardown = closeFd
 
 -- |
@@ -111,7 +111,7 @@ sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -
 sendfileWithHeader sock path range hook hdr =
     bracket setup teardown $ \fd -> sendfileFdWithHeader sock fd range hook hdr
   where
-    setup = openFd path ReadOnly Nothing defaultFileFlags{nonBlock=True}
+    setup = openFd path ReadOnly defaultFileFlags{nonBlock=True}
     teardown = closeFd
 
 -- |
