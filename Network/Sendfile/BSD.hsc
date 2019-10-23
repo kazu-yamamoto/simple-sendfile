@@ -22,7 +22,11 @@ import Network.Sendfile.IOVec
 import Network.Sendfile.Types
 import Network.Socket
 import Network.Socket.ByteString
-import System.Posix.IO (OpenMode(..), OpenFileFlags(..))
+import System.Posix.IO ( OpenMode(..)
+                       , OpenFileFlags(..)
+                       , defaultFileFlags
+                       , closeFd
+                       )
 import System.Posix.Types
 
 #include <sys/types.h>
