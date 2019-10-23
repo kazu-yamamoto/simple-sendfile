@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module SendfileSpec where
@@ -87,18 +88,34 @@ sendFileHLarge range = sendFileCore range headers
 
 sendFileCore :: FileRange -> [ByteString] -> IO ExitCode
 sendFileCore range headers = bracket setup teardown $ \(s2,_) -> do
+#if MIN_VERSION_conduit(1,3,0)
+    runResourceT $ runConduit (sourceSocket s2 .| sinkFile outputFile)
+#else
     runResourceT $ sourceSocket s2 $$ sinkFile outputFile
+#endif
     runResourceT $ copyfile range
     system $ "cmp -s " ++ outputFile ++ " " ++ expectedFile
   where
     copyfile EntireFile = do
         -- of course, we can use <> here
+#if MIN_VERSION_conduit(1,3,0)
+        runConduit (sourceList headers .| sinkFile expectedFile)
+        runConduit (sourceFile inputFile .| sinkAppendFile expectedFile)
+#else
         sourceList headers $$ sinkFile expectedFile
         sourceFile inputFile $$ sinkAppendFile expectedFile
+#endif
     copyfile (PartOfFile off len) = do
+#if MIN_VERSION_conduit(1,3,0)
+        runConduit (sourceList headers .| sinkFile expectedFile)
+        runConduit (sourceFile inputFile
+                 .| CB.isolate (off' + len')
+                 .| (CB.take off' >> sinkAppendFile expectedFile))
+#else
         sourceList headers $$ sinkFile expectedFile
         sourceFile inputFile $= CB.isolate (off' + len')
                              $$ (CB.take off' >> sinkAppendFile expectedFile)
+#endif
       where
         off' = fromIntegral off
         len' = fromIntegral len
@@ -139,7 +156,11 @@ sendIllegalH range = sendIllegalCore range headers
 
 sendIllegalCore :: FileRange -> [ByteString] -> IO ()
 sendIllegalCore range headers = bracket setup teardown $ \(s2,_) -> do
+#if MIN_VERSION_conduit(1,3,0)
+    runResourceT $ runConduit (sourceSocket s2 .| sinkFile outputFile)
+#else
     runResourceT $ sourceSocket s2 $$ sinkFile outputFile
+#endif
     return ()
   where
     setup = do
@@ -177,11 +198,19 @@ truncateFileH = truncateFileCore headers
 
 truncateFileCore :: [ByteString] -> IO ()
 truncateFileCore headers = bracket setup teardown $ \(s2,_) -> do
+#if MIN_VERSION_conduit(1,3,0)
+    runResourceT $ runConduit (sourceSocket s2 .| sinkFile outputFile)
+#else
     runResourceT $ sourceSocket s2 $$ sinkFile outputFile
+#endif
     return ()
   where
     setup = do
+#if MIN_VERSION_conduit(1,3,0)
+        runResourceT $ runConduit (sourceFile inputFile .| sinkFile tempFile)
+#else
         runResourceT $ sourceFile inputFile $$ sinkFile tempFile
+#endif
         (s1,s2) <- socketPair AF_UNIX Stream 0
         ref <- newIORef (1 :: Int)
         tid <- forkIO (sf s1 ref `finally` sendEOF s1)
@@ -214,5 +243,9 @@ removeFileIfExists file = do
 
 sinkAppendFile :: MonadResource m
                   => FilePath
+#if MIN_VERSION_conduit(1,3,0)
+                  -> ConduitT ByteString Void m ()
+#else
                   -> Sink ByteString m ()
+#endif
 sinkAppendFile fp = sinkIOHandle (openBinaryFile fp AppendMode)

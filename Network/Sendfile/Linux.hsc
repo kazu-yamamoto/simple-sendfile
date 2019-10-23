@@ -10,12 +10,10 @@ module Network.Sendfile.Linux (
   , sendfileFdWithHeader
   ) where
 
-import Control.Applicative
 import Control.Exception
 import Control.Monad
 import Data.ByteString as B
 import Data.ByteString.Internal
-import Data.Int
 import Foreign.C.Error (eAGAIN, getErrno, throwErrno)
 import Foreign.C.Types
 import Foreign.Marshal (alloca)
@@ -26,8 +24,11 @@ import GHC.Conc (threadWaitWrite)
 import Network.Sendfile.Types
 import Network.Socket
 import System.Posix.Files
-import System.Posix.IO
-import qualified System.Posix.IO.ByteString as B
+import System.Posix.IO ( OpenMode(..)
+                       , OpenFileFlags(..)
+                       , defaultFileFlags
+                       , closeFd
+                       )
 import System.Posix.Types
 
 #include <sys/sendfile.h>
@@ -66,14 +67,14 @@ sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
 sendfile sock path range hook = bracket setup teardown $ \fd ->
     sendfileFd sock fd range hook
   where
-    setup = openFd path ReadOnly Nothing defaultFileFlags{nonBlock=True}
+    setup = openFd path ReadOnly defaultFileFlags{nonBlock=True}
     teardown = closeFd
 
 sendfile' :: Fd -> ByteString -> FileRange -> IO () -> IO ()
 sendfile' dst path range hook = bracket setup teardown $ \src ->
     sendfileFd' dst src range hook
   where
-    setup = B.openFd path ReadOnly Nothing defaultFileFlags{nonBlock=True}
+    setup = openFdBS path ReadOnly defaultFileFlags{nonBlock=True}
     teardown = closeFd
 
 -- |
@@ -93,7 +94,10 @@ sendfile' dst path range hook = bracket setup teardown $ \src ->
 -- is sent and bofore waiting the socket to be ready for writing.
 sendfileFd :: Socket -> Fd -> FileRange -> IO () -> IO ()
 sendfileFd sock fd range hook = do
-#if MIN_VERSION_network(3,0,0)
+#if MIN_VERSION_network(3,1,0)
+  withFdSocket sock $ \s -> do
+    let dst = Fd s
+#elif MIN_VERSION_network(3,0,0)
     dst <- Fd <$> fdSocket sock
 #else
     let dst = Fd $ fdSocket sock
@@ -204,7 +208,10 @@ sendfileFdWithHeader sock fd range hook hdr = do
 
 sendMsgMore :: Socket -> ByteString -> IO ()
 sendMsgMore sock bs = withForeignPtr fptr $ \ptr -> do
-#if MIN_VERSION_network(3,0,0)
+#if MIN_VERSION_network(3,1,0)
+  withFdSocket sock $ \fd -> do
+    let s = Fd fd
+#elif MIN_VERSION_network(3,0,0)
     s <- Fd <$> fdSocket sock
 #else
     let s = Fd $ fdSocket sock

@@ -22,7 +22,11 @@ import Network.Sendfile.IOVec
 import Network.Sendfile.Types
 import Network.Socket
 import Network.Socket.ByteString
-import System.Posix.IO
+import System.Posix.IO ( OpenMode(..)
+                       , OpenFileFlags(..)
+                       , defaultFileFlags
+                       , closeFd
+                       )
 import System.Posix.Types
 
 #include <sys/types.h>
@@ -44,7 +48,7 @@ sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
 sendfile sock path range hook = bracket setup teardown $ \fd ->
     sendfileFd sock fd range hook
   where
-    setup = openFd path ReadOnly Nothing defaultFileFlags{nonBlock=True}
+    setup = openFd path ReadOnly defaultFileFlags{nonBlock=True}
     teardown = closeFd
 
 -- |
@@ -59,7 +63,10 @@ sendfile sock path range hook = bracket setup teardown $ \fd ->
 
 sendfileFd :: Socket -> Fd -> FileRange -> IO () -> IO ()
 sendfileFd sock fd range hook = do
-#if MIN_VERSION_network(3,0,0)
+#if MIN_VERSION_network(3,1,0)
+  withFdSocket sock $ \s -> do
+    let dst = Fd s
+#elif MIN_VERSION_network(3,0,0)
     dst <- Fd <$> fdSocket sock
 #else
     let dst = Fd $ fdSocket sock
@@ -108,7 +115,7 @@ sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -
 sendfileWithHeader sock path range hook hdr =
     bracket setup teardown $ \fd -> sendfileFdWithHeader sock fd range hook hdr
   where
-    setup = openFd path ReadOnly Nothing defaultFileFlags{nonBlock=True}
+    setup = openFd path ReadOnly defaultFileFlags{nonBlock=True}
     teardown = closeFd
 
 -- |
@@ -128,7 +135,10 @@ sendfileWithHeader sock path range hook hdr =
 
 sendfileFdWithHeader :: Socket -> Fd -> FileRange -> IO () -> [ByteString] -> IO ()
 sendfileFdWithHeader sock fd range hook hdr = do
-#if MIN_VERSION_network(3,0,0)
+#if MIN_VERSION_network(3,1,0)
+  withFdSocket sock $ \s -> do
+    let dst = Fd s
+#elif MIN_VERSION_network(3,0,0)
     dst <- Fd <$> fdSocket sock
 #else
     let dst = Fd $ fdSocket sock
