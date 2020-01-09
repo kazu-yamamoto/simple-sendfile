@@ -39,7 +39,7 @@ Library
                         Network.Sendfile.IOVec
       Build-Depends:    unix
     else
-      if os(linux)
+      if os(linux) && !impl(ghcjs)
         CPP-Options:    -DOS_Linux
         Exposed-Modules: System.Linux.Sendfile
         Other-Modules:  Network.Sendfile.Linux

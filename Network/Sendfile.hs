@@ -9,10 +9,8 @@
 module Network.Sendfile (
     sendfile
   , sendfileWithHeader
-#if OS_BSD || OS_MacOS || OS_Linux
   , sendfileFd
   , sendfileFdWithHeader
-#endif
   , FileRange(..)
   ) where
 
