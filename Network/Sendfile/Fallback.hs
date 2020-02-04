@@ -22,12 +22,12 @@ import Control.Monad.Trans.Resource (runResourceT)
 
 sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
 sendfile sock path EntireFile hook =
-    runResourceT $ sourceFile path $$ sinkSocket sock hook
+    runResourceT $ runConduit $ sourceFile path .| sinkSocket sock hook
 sendfile sock path (PartOfFile off len) hook =
-    runResourceT $ EB.sourceFileRange path (Just off) (Just len) $$ sinkSocket sock hook
+    runResourceT $ runConduit $ EB.sourceFileRange path (Just off) (Just len) .| sinkSocket sock hook
 
 -- See sinkHandle.
-sinkSocket :: MonadIO m => Socket -> IO () -> Sink ByteString m ()
+sinkSocket :: MonadIO m => Socket -> IO () -> ConduitT ByteString Void m ()
 #if MIN_VERSION_conduit(0,5,0)
 sinkSocket s hook = awaitForever $ \bs -> liftIO $ SB.sendAll s bs >> hook
 #else
