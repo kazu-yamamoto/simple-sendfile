@@ -23,7 +23,7 @@ import System.Posix.Types (Fd)
 -- The fourth action argument is called when a file is sent as chunks.
 -- Chucking is inevitable if the socket is non-blocking (this is the
 -- default) and the file is large. The action is called after a chunk
--- is sent and bofore waiting the socket to be ready for writing.
+-- is sent and before waiting the socket to be ready for writing.
 
 sendfile :: Fd -> ByteString -> FileRange -> IO () -> IO ()
 sendfile = sendfile'
@@ -42,7 +42,7 @@ sendfile = sendfile'
 -- The fourth action argument is called when a file is sent as chunks.
 -- Chucking is inevitable if the socket is non-blocking (this is the
 -- default) and the file is large. The action is called after a chunk
--- is sent and bofore waiting the socket to be ready for writing.
+-- is sent and before waiting the socket to be ready for writing.
 
 sendfileFd :: Fd -> Fd -> FileRange -> IO () -> IO ()
 sendfileFd = sendfileFd'
