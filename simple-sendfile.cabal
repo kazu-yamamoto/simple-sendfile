@@ -48,7 +48,7 @@ Library
         Other-Modules:  Network.Sendfile.Fallback
         Build-Depends:  conduit         >= 1.0 && < 1.4
                       , conduit-extra   >= 1.0 && < 1.4
-                      , transformers    >= 0.2.2 && < 0.6
+                      , transformers    >= 0.2.2 && < 0.7
                       , resourcet
 
 Test-Suite spec
