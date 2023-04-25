@@ -1,6 +1,6 @@
 cabal-version:      >=1.10
 name:               simple-sendfile
-version:            0.2.30
+version:            0.2.31
 license:            BSD3
 license-file:       LICENSE
 maintainer:         Kazu Yamamoto <kazu@iij.ad.jp>
