@@ -12,7 +12,6 @@ import Network.Sendfile.Types
 import Network.Socket
 import Network.Socket.ByteString
 import qualified Network.Socket.ByteString as SB
-import Control.Monad.Trans.Resource (runResourceT)
 
 -- |
 -- Sendfile emulation using conduit.
@@ -22,12 +21,12 @@ import Control.Monad.Trans.Resource (runResourceT)
 
 sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
 sendfile sock path EntireFile hook =
-    runResourceT $ sourceFile path $$ sinkSocket sock hook
+    runConduitRes $ sourceFile path  .| sinkSocket sock hook
 sendfile sock path (PartOfFile off len) hook =
-    runResourceT $ EB.sourceFileRange path (Just off) (Just len) $$ sinkSocket sock hook
+    runConduitRes $ EB.sourceFileRange path (Just off) (Just len) .| sinkSocket sock hook
 
 -- See sinkHandle.
-sinkSocket :: MonadIO m => Socket -> IO () -> Sink ByteString m ()
+sinkSocket :: MonadIO m => Socket -> IO () -> ConduitT ByteString Void m ()
 #if MIN_VERSION_conduit(0,5,0)
 sinkSocket s hook = awaitForever $ \bs -> liftIO $ SB.sendAll s bs >> hook
 #else
