@@ -22,6 +22,10 @@ source-repository head
 flag allow-bsd
     description: Allow use of BSD sendfile (disable on GNU/kFreeBSD)
 
+flag fallback
+    description: Use counduit instead of sendfile()
+    default: False
+
 library
     exposed-modules:  Network.Sendfile
     other-modules:    Network.Sendfile.Types
@@ -32,7 +36,7 @@ library
         network,
         bytestring
 
-    if (os(freebsd) && flag(allow-bsd))
+    if (os(freebsd) && flag(allow-bsd) && !flag(fallback))
         cpp-options:   -DOS_BSD
         other-modules:
             Network.Sendfile.BSD
@@ -41,7 +45,7 @@ library
         build-depends: unix
 
     else
-        if os(osx)
+        if (os(osx) && !flag(fallback))
             cpp-options:   -DOS_MacOS
             other-modules:
                 Network.Sendfile.BSD
@@ -50,7 +54,7 @@ library
             build-depends: unix
 
         else
-            if os(linux)
+            if (os(linux) && !flag(fallback))
                 exposed-modules: System.Linux.Sendfile
                 cpp-options:     -DOS_Linux
                 other-modules:   Network.Sendfile.Linux
