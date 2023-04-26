@@ -18,9 +18,9 @@ import Network.Socket
 import System.Directory
 import System.Exit
 import System.IO
-import System.Posix.Files
 import System.Process
 import System.Timeout
+import System.EasyFile
 import Test.Hspec
 
 ----------------------------------------------------------------
