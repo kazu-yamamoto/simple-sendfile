@@ -17,7 +17,7 @@ extra-source-files: test/inputFile
 
 source-repository head
     type:     git
-    location: git://github.com/kazu-yamamoto/simple-sendfile
+    location: https://github.com/kazu-yamamoto/simple-sendfile
 
 flag allow-bsd
     description: Allow use of BSD sendfile (disable on GNU/kFreeBSD)
