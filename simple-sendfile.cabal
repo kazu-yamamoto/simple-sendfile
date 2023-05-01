@@ -23,7 +23,7 @@ flag allow-bsd
     description: Allow use of BSD sendfile (disable on GNU/kFreeBSD)
 
 flag fallback
-    description: Use counduit instead of sendfile()
+    description: Use conduit instead of sendfile()
     default: False
 
 library
