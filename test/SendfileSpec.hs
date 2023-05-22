@@ -8,6 +8,7 @@ import Control.Exception
 import Control.Monad
 import Control.Monad.Trans.Resource (MonadResource, runResourceT)
 import Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Lazy as BL
 import Data.Conduit
 import Data.Conduit.Binary as CB
 import Data.Conduit.List as CL
@@ -16,9 +17,7 @@ import Data.IORef
 import Network.Sendfile
 import Network.Socket
 import System.Directory
-import System.Exit
 import System.IO
-import System.Process
 import System.Timeout
 import System.EasyFile
 import Test.Hspec
@@ -29,9 +28,9 @@ spec :: Spec
 spec = do
     describe "sendfile" $ do
         it "sends an entire file" $ do
-            sendFile EntireFile `shouldReturn` ExitSuccess
+            sendFile EntireFile `shouldReturn` True
         it "sends a part of file" $ do
-            sendFile (PartOfFile 2000 1000000) `shouldReturn` ExitSuccess
+            sendFile (PartOfFile 2000 1000000) `shouldReturn` True
         it "terminates even if length is over" $ do
             shouldTerminate $ sendIllegal (PartOfFile 2000 5000000)
         it "terminates even if offset is over" $ do
@@ -40,13 +39,13 @@ spec = do
             shouldTerminate truncateFile
     describe "sendfileWithHeader" $ do
         it "sends an header and an entire file" $ do
-            sendFileH EntireFile `shouldReturn` ExitSuccess
+            sendFileH EntireFile `shouldReturn` True
         it "sends an header and a part of file" $ do
-            sendFileH (PartOfFile 2000 1000000) `shouldReturn` ExitSuccess
+            sendFileH (PartOfFile 2000 1000000) `shouldReturn` True
         it "sends a large header and an entire file" $ do
-            sendFileHLarge EntireFile `shouldReturn` ExitSuccess
+            sendFileHLarge EntireFile `shouldReturn` True
         it "sends a large header and a part of file" $ do
-            sendFileHLarge (PartOfFile 2000 1000000) `shouldReturn` ExitSuccess
+            sendFileHLarge (PartOfFile 2000 1000000) `shouldReturn` True
         it "terminates even if length is over" $ do
             shouldTerminate $ sendIllegalH (PartOfFile 2000 5000000)
         it "terminates even if offset is over" $ do
@@ -59,10 +58,10 @@ spec = do
 
 ----------------------------------------------------------------
 
-sendFile :: FileRange -> IO ExitCode
+sendFile :: FileRange -> IO Bool
 sendFile range = sendFileCore range []
 
-sendFileH :: FileRange -> IO ExitCode
+sendFileH :: FileRange -> IO Bool
 sendFileH range = sendFileCore range headers
   where
     headers = [
@@ -74,7 +73,7 @@ sendFileH range = sendFileCore range headers
       , "\n"
       ]
 
-sendFileHLarge :: FileRange -> IO ExitCode
+sendFileHLarge :: FileRange -> IO Bool
 sendFileHLarge range = sendFileCore range headers
   where
     headers = [
@@ -86,7 +85,7 @@ sendFileHLarge range = sendFileCore range headers
       , "\n"
       ]
 
-sendFileCore :: FileRange -> [ByteString] -> IO ExitCode
+sendFileCore :: FileRange -> [ByteString] -> IO Bool
 sendFileCore range headers = bracket setup teardown $ \(s2,_) -> do
 #if MIN_VERSION_conduit(1,3,0)
     runResourceT $ runConduit (sourceSocket s2 .| sinkFile outputFile)
@@ -94,7 +93,7 @@ sendFileCore range headers = bracket setup teardown $ \(s2,_) -> do
     runResourceT $ sourceSocket s2 $$ sinkFile outputFile
 #endif
     runResourceT $ copyfile range
-    system $ "cmp -s " ++ outputFile ++ " " ++ expectedFile
+    (==) <$> (BL.readFile outputFile) <*> (BL.readFile expectedFile)
   where
     copyfile EntireFile = do
         -- of course, we can use <> here
