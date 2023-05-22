@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -93,7 +94,9 @@ sendFileCore range headers = bracket setup teardown $ \(s2,_) -> do
     runResourceT $ sourceSocket s2 $$ sinkFile outputFile
 #endif
     runResourceT $ copyfile range
-    (==) <$> (BL.readFile outputFile) <*> (BL.readFile expectedFile)
+    !f1 <- BL.readFile outputFile
+    !f2 <- BL.readFile expectedFile
+    return $! (f1 == f2)
   where
     copyfile EntireFile = do
         -- of course, we can use <> here
