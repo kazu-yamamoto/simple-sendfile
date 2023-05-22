@@ -36,6 +36,9 @@ spec = do
             shouldTerminate $ sendIllegal (PartOfFile 2000 5000000)
         it "terminates even if offset is over" $ do
             shouldTerminate $ sendIllegal (PartOfFile 5000000 6000000)
+        -- On Windows, setFileSize throws an exception due to the
+        -- access permission. The test case will be finished but it is
+        -- not a right test.
         it "terminates even if the file is truncated" $ do
             shouldTerminate truncateFile
     describe "sendfileWithHeader" $ do
@@ -51,6 +54,9 @@ spec = do
             shouldTerminate $ sendIllegalH (PartOfFile 2000 5000000)
         it "terminates even if offset is over" $ do
             shouldTerminate $ sendIllegalH (PartOfFile 5000000 6000000)
+        -- On Windows, setFileSize throws an exception due to the
+        -- access permission. The test case will be finished but it is
+        -- not a right test.
         it "terminates even if the file is truncated" $ do
             shouldTerminate truncateFileH
   where
