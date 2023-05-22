@@ -133,8 +133,8 @@ sendFileCore range headers = bracket setup teardown $ \(s2,_) -> do
         killThread tid
         removeFileIfExists outputFile
         removeFileIfExists expectedFile
-    inputFile = "test/inputFile"
-    outputFile = "test/outputFile"
+    inputFile    = "test/inputFile"
+    outputFile   = "test/outputFile"
     expectedFile = "test/expectedFile"
 
 ----------------------------------------------------------------
@@ -176,7 +176,7 @@ sendIllegalCore range headers = bracket setup teardown $ \(s2,_) -> do
         close s2
         killThread tid
         removeFileIfExists outputFile
-    inputFile = "test/inputFile"
+    inputFile  = "test/inputFile"
     outputFile = "test/outputFile"
 
 ----------------------------------------------------------------
@@ -229,8 +229,8 @@ truncateFileCore headers = bracket setup teardown $ \(s2,_) -> do
         killThread tid
         removeFileIfExists tempFile
         removeFileIfExists outputFile
-    inputFile = "test/inputFile"
-    tempFile = "test/tempFile"
+    inputFile  = "test/inputFile"
+    tempFile   = "test/tempFile"
     outputFile = "test/outputFile"
     range = EntireFile
 
