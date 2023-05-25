@@ -33,7 +33,7 @@ library
     ghc-options:      -Wall
     build-depends:
         base >=4.8 && <5,
-        network,
+        network >=3.1.4,
         bytestring
 
     if (os(freebsd) && flag(allow-bsd) && !flag(fallback))
