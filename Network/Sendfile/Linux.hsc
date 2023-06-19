@@ -1,6 +1,8 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE CPP #-}
 
+#define _FILE_OFFSET_BITS 64
+
 module Network.Sendfile.Linux (
     sendfile
   , sendfile'
@@ -33,9 +35,6 @@ import System.Posix.Types
 
 #include <sys/sendfile.h>
 #include <sys/socket.h>
-
-isLargeOffset :: Bool
-isLargeOffset = sizeOf (0 :: COff) == 8
 
 isLargeSize :: Bool
 isLargeSize = sizeOf (0 :: CSize) == 8
@@ -142,15 +141,7 @@ sendfileloop dst src offp len hook = do
 
 -- Dst Src in order. take care
 foreign import ccall unsafe "sendfile"
-    c_sendfile32 :: Fd -> Fd -> Ptr COff -> CSize -> IO CSsize
-
-foreign import ccall unsafe "sendfile64"
-    c_sendfile64 :: Fd -> Fd -> Ptr COff -> CSize -> IO CSsize
-
-c_sendfile :: Fd -> Fd -> Ptr COff -> CSize -> IO CSsize
-c_sendfile
-  | isLargeOffset = c_sendfile64
-  | otherwise     = c_sendfile32
+    c_sendfile :: Fd -> Fd -> Ptr COff -> CSize -> IO CSsize
 
 ----------------------------------------------------------------
 
