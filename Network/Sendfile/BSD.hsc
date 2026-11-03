@@ -71,11 +71,12 @@ sendfileFd sock fd range hook = do
 #else
     let dst = Fd $ fdSocket sock
 #endif
-    alloca $ \sentp -> do
-        let (off,len) = case range of
-                EntireFile           -> (0, entire)
-                PartOfFile off' len' -> (fromInteger off', fromInteger len')
-        sendloop dst fd off len sentp hook
+    alloca $ \sentp -> case range of
+        EntireFile -> sendloop dst fd 0 entire sentp hook
+        -- 0 means the entire file for BSD sendfile(), so skip it.
+        PartOfFile off len
+          | len <= 0  -> return ()
+          | otherwise -> sendloop dst fd (fromInteger off) (fromInteger len) sentp hook
 
 sendloop :: Fd -> Fd -> COff -> COff -> Ptr COff -> IO () -> IO ()
 sendloop dst src off len sentp hook = do
@@ -85,12 +86,14 @@ sendloop dst src off len sentp hook = do
         if errno `elem` [eAGAIN, eINTR] then do
             sent <- peek sentp
             hook
-            -- Parallel IO manager use edge-trigger mode.
-            -- So, calling threadWaitWrite only when errnor is eAGAIN.
-            when (errno == eAGAIN) $ threadWaitWrite dst
             let newoff = off + sent
                 newlen = if len == entire then entire else len - sent
-            sendloop dst src newoff newlen sentp hook
+            -- newlen must not reach 0, which means the entire file.
+            unless (len /= entire && newlen <= 0) $ do
+                -- Parallel IO manager use edge-trigger mode.
+                -- So, calling threadWaitWrite only when errnor is eAGAIN.
+                when (errno == eAGAIN) $ threadWaitWrite dst
+                sendloop dst src newoff newlen sentp hook
           else
             throwErrno "Network.SendFile.MacOS.sendloop"
 
@@ -144,7 +147,10 @@ sendfileFdWithHeader sock fd range hook hdr = do
     let dst = Fd $ fdSocket sock
 #endif
     alloca $ \sentp ->
-        if isFreeBSD && hlen >= 8192 then do
+        if isEmptyPart then
+            -- 0 means the entire file for BSD sendfile(), so skip it.
+            sendMany sock hdr
+          else if isFreeBSD && hlen >= 8192 then do
             -- If the length of the header is larger than 8191,
             -- threadWaitWrite does not come back on FreeBSD, sigh.
             -- We use writev() for the header and sendfile() for the file.
@@ -166,6 +172,9 @@ sendfileFdWithHeader sock fd range hook hdr = do
                     sendloop dst fd newoff newlen sentp hook
   where
     hlen = fromIntegral . sum . map BS.length $ hdr
+    isEmptyPart = case range of
+        PartOfFile _ len -> len <= 0
+        EntireFile       -> False
 
 sendloopHeader :: Fd -> Fd -> COff -> COff -> Ptr COff -> [ByteString] -> COff -> IO (Maybe (COff, COff))
 sendloopHeader dst src off len sentp hdr hlen = do
@@ -180,6 +189,9 @@ sendloopHeader dst src off len sentp hdr hlen = do
                 let newoff = off + sent - hlen
                 if len == entire then
                     return $ Just (newoff, entire)
+                  else if len - sent <= 0 then
+                    -- 0 means the entire file, so stop here.
+                    return Nothing
                   else
                     return $ Just (newoff, len - sent)
               else do
