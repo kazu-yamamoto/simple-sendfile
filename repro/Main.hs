@@ -11,7 +11,8 @@ import qualified Data.ByteString as B
 import Data.Maybe (isNothing)
 import Network.Socket
 import qualified Network.Socket.ByteString as SB
-import System.Environment (getArgs)
+import System.Environment (getArgs, lookupEnv)
+import System.Process (getCurrentPid, callProcess)
 import System.IO
 import System.Timeout (timeout)
 
@@ -35,6 +36,13 @@ oneIter mode = do
             _ <- forkIO sender
             timeout 2000000 (drain s2)
     when (isNothing r) $ do
+        -- Snapshot all thread stacks before touching s2 (CDB = path to cdb.exe).
+        mcdb <- lookupEnv "CDB"
+        forM_ mcdb $ \cdb -> do
+            pid <- getCurrentPid
+            putStrLn ("  attaching cdb to pid " ++ show pid)
+            callProcess cdb ["-pv", "-p", show pid, "-c", "~*k 30; qd"]
+                `catch` \(e :: SomeException) -> putStrLn ("  cdb failed: " ++ show e)
         -- Probe: is EOF already visible at the OS level?
         r2 <- timeout 1000000 (SB.recv s2 4096)
         putStrLn ("  hang (" ++ mode ++ "): second recv = " ++ show r2)
