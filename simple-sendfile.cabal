@@ -76,7 +76,8 @@ test-suite spec
     hs-source-dirs:     test
     other-modules:      SendfileSpec
     default-language:   Haskell2010
-    ghc-options:        -Wall
+    -- The non-threaded RTS on Windows sometimes misses EOF on sockets.
+    ghc-options:        -Wall -threaded
     build-depends:
         HUnit,
         base,
