@@ -1,5 +1,4 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
-{-# LANGUAGE CPP #-}
 
 #define _FILE_OFFSET_BITS 64
 
@@ -93,14 +92,8 @@ sendfile' dst path range hook = bracket setup teardown $ \src ->
 -- is sent and before waiting the socket to be ready for writing.
 sendfileFd :: Socket -> Fd -> FileRange -> IO () -> IO ()
 sendfileFd sock fd range hook = do
-#if MIN_VERSION_network(3,1,0)
   withFdSocket sock $ \s -> do
     let dst = Fd s
-#elif MIN_VERSION_network(3,0,0)
-    dst <- Fd <$> fdSocket sock
-#else
-    let dst = Fd $ fdSocket sock
-#endif
     sendfileFd' dst fd range hook
 
 sendfileFd' :: Fd -> Fd -> FileRange -> IO () -> IO ()
@@ -199,14 +192,8 @@ sendfileFdWithHeader sock fd range hook hdr = do
 
 sendMsgMore :: Socket -> ByteString -> IO ()
 sendMsgMore sock bs = withForeignPtr fptr $ \ptr -> do
-#if MIN_VERSION_network(3,1,0)
   withFdSocket sock $ \fd -> do
     let s = Fd fd
-#elif MIN_VERSION_network(3,0,0)
-    s <- Fd <$> fdSocket sock
-#else
-    let s = Fd $ fdSocket sock
-#endif
     let buf = castPtr (ptr `plusPtr` off)
         siz = fromIntegral len
     sendloop s buf siz
