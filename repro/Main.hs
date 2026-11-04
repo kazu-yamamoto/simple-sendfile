@@ -41,7 +41,7 @@ oneIter mode = do
         forM_ mcdb $ \cdb -> do
             pid <- getCurrentPid
             putStrLn ("  attaching cdb to pid " ++ show pid)
-            callProcess cdb ["-pv", "-p", show pid, "-c", "~*k 30; qd"]
+            callProcess cdb ["-p", show pid, "-c", "~*k 30; qd"]
                 `catch` \(e :: SomeException) -> putStrLn ("  cdb failed: " ++ show e)
         -- Probe: is EOF already visible at the OS level?
         r2 <- timeout 1000000 (SB.recv s2 4096)
