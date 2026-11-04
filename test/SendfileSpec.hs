@@ -22,6 +22,7 @@ import System.IO
 import System.Timeout
 import System.EasyFile
 import Test.Hspec
+import System.IO.Unsafe (unsafePerformIO)
 
 ----------------------------------------------------------------
 
@@ -61,7 +62,10 @@ spec = do
             shouldTerminate truncateFileH
   where
     fiveSecs = 5000000
-    shouldTerminate body = timeout fiveSecs body `shouldReturn` Just ()
+    shouldTerminate body = do
+        r <- timeout fiveSecs body
+        when (r == Nothing) $ tr "TIMEOUT" >> dumpTrace
+        r `shouldBe` Just ()
 
 ----------------------------------------------------------------
 
@@ -94,8 +98,10 @@ sendFileHLarge range = sendFileCore range headers
 
 sendFileCore :: FileRange -> [ByteString] -> IO Bool
 sendFileCore range headers = bracket setup teardown $ \(s2,_) -> do
+    tr "reader:begin"
 #if MIN_VERSION_conduit(1,3,0)
     runResourceT $ runConduit (sourceSocket s2 .| sinkFile outputFile)
+    tr "reader:eof"
 #else
     runResourceT $ sourceSocket s2 $$ sinkFile outputFile
 #endif
@@ -128,17 +134,24 @@ sendFileCore range headers = bracket setup teardown $ \(s2,_) -> do
         off' = fromIntegral off
         len' = fromIntegral len
     setup = do
+        tr "setup:begin"
         (s1,s2) <- socketPair AF_UNIX Stream 0
-        tid <- forkIO (sf s1 `finally` sendEOF s1)
+        tr "setup:pair"
+        tid <- forkIO $
+            (tr "sender:begin" >> sf s1 >> tr "sender:sent")
+            `finally` (tr "sender:close" >> sendEOF s1 >> tr "sender:closed")
         return (s2,tid)
       where
         sf s1
-          | headers == [] = sendfile s1 inputFile range (return ())
-          | otherwise     = sendfileWithHeader s1 inputFile range (return ()) headers
+          | headers == [] = sendfile s1 inputFile range (tr "sender:hook")
+          | otherwise     = sendfileWithHeader s1 inputFile range (tr "sender:hook") headers
         sendEOF = close
     teardown (s2,tid) = do
+        tr "teardown:begin"
         close s2
+        tr "teardown:closed"
         killThread tid
+        tr "teardown:killed"
         removeFileIfExists outputFile
         removeFileIfExists expectedFile
     inputFile    = "test/inputFile"
@@ -164,25 +177,34 @@ sendIllegalH range = sendIllegalCore range headers
 
 sendIllegalCore :: FileRange -> [ByteString] -> IO ()
 sendIllegalCore range headers = bracket setup teardown $ \(s2,_) -> do
+    tr "reader:begin"
 #if MIN_VERSION_conduit(1,3,0)
     runResourceT $ runConduit (sourceSocket s2 .| sinkFile outputFile)
+    tr "reader:eof"
 #else
     runResourceT $ sourceSocket s2 $$ sinkFile outputFile
 #endif
     return ()
   where
     setup = do
+        tr "setup:begin"
         (s1,s2) <- socketPair AF_UNIX Stream 0
-        tid <- forkIO (sf s1 `finally` sendEOF s1)
+        tr "setup:pair"
+        tid <- forkIO $
+            (tr "sender:begin" >> sf s1 >> tr "sender:sent")
+            `finally` (tr "sender:close" >> sendEOF s1 >> tr "sender:closed")
         return (s2,tid)
       where
         sf s1
-          | headers == [] = sendfile s1 inputFile range (return ())
-          | otherwise     = sendfileWithHeader s1 inputFile range (return ()) headers
+          | headers == [] = sendfile s1 inputFile range (tr "sender:hook")
+          | otherwise     = sendfileWithHeader s1 inputFile range (tr "sender:hook") headers
         sendEOF = close
     teardown (s2,tid) = do
+        tr "teardown:begin"
         close s2
+        tr "teardown:closed"
         killThread tid
+        tr "teardown:killed"
         removeFileIfExists outputFile
     inputFile  = "test/inputFile"
     outputFile = "test/outputFile"
@@ -206,8 +228,10 @@ truncateFileH = truncateFileCore headers
 
 truncateFileCore :: [ByteString] -> IO ()
 truncateFileCore headers = bracket setup teardown $ \(s2,_) -> do
+    tr "reader:begin"
 #if MIN_VERSION_conduit(1,3,0)
     runResourceT $ runConduit (sourceSocket s2 .| sinkFile outputFile)
+    tr "reader:eof"
 #else
     runResourceT $ sourceSocket s2 $$ sinkFile outputFile
 #endif
@@ -233,8 +257,11 @@ truncateFileCore headers = bracket setup teardown $ \(s2,_) -> do
             when (n == 10) $ setFileSize tempFile 900000
             writeIORef ref (n+1)
     teardown (s2,tid) = do
+        tr "teardown:begin"
         close s2
+        tr "teardown:closed"
         killThread tid
+        tr "teardown:killed"
         removeFileIfExists tempFile
         removeFileIfExists outputFile
     inputFile  = "test/inputFile"
@@ -257,3 +284,23 @@ sinkAppendFile :: MonadResource m
                   -> Sink ByteString m ()
 #endif
 sinkAppendFile fp = sinkIOHandle (openBinaryFile fp AppendMode)
+
+----------------------------------------------------------------
+
+-- Lightweight trace ring dumped only on timeout, to locate hangs
+-- without perturbing timing (formatting happens in dumpTrace).
+traceBuf :: IORef [(ThreadId, String)]
+traceBuf = unsafePerformIO $ newIORef []
+{-# NOINLINE traceBuf #-}
+
+tr :: String -> IO ()
+tr msg = do
+    tid <- myThreadId
+    atomicModifyIORef' traceBuf (\xs -> (Prelude.take 200 ((tid, msg) : xs), ()))
+
+dumpTrace :: IO ()
+dumpTrace = do
+    xs <- atomicModifyIORef' traceBuf (\xs -> ([], xs))
+    forM_ (Prelude.reverse (Prelude.take 80 xs)) $ \(t, m) ->
+        System.IO.hPutStrLn stderr ("TRACE " ++ show t ++ " " ++ m)
+    hFlush stderr
