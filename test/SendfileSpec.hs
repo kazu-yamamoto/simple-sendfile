@@ -1,5 +1,4 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -75,11 +74,8 @@ spec = do
             sendRejectedH (PartOfFile (-1) 1000) `shouldReturn` ""
         it "sends nothing for a negative length" $ do
             sendRejectedH (PartOfFile 2000 (-1)) `shouldReturn` ""
-#if !defined(linux_HOST_OS)
-        -- Linux still sends the header before opening the file.
         it "sends nothing if the file does not exist" $ do
             sendMissingH `shouldReturn` ""
-#endif
   where
     fiveSecs = 5000000
     shouldTerminate body = do

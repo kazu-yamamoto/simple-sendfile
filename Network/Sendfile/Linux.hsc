@@ -1,4 +1,6 @@
-{-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE CApiFFI #-}
+-- Let sendfile() take a 64-bit off_t also on 32-bit platforms.
+{-# OPTIONS_GHC -optc-D_FILE_OFFSET_BITS=64 #-}
 
 #define _FILE_OFFSET_BITS 64
 
@@ -13,13 +15,13 @@ module Network.Sendfile.Linux (
 
 import Control.Exception
 import Control.Monad
-import Data.ByteString as B
-import Data.ByteString.Internal
-import Foreign.C.Error (eAGAIN, getErrno, throwErrno)
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as B
+import Data.ByteString.Unsafe (unsafeUseAsCStringLen)
+import Foreign.C.Error (eAGAIN, eINTR, getErrno, throwErrno)
 import Foreign.C.Types
 import Foreign.Marshal (alloca)
-import Foreign.Ptr (Ptr, plusPtr, castPtr)
-import Foreign.ForeignPtr
+import Foreign.Ptr (Ptr, plusPtr)
 import Foreign.Storable (poke, sizeOf)
 import GHC.Conc (threadWaitWrite)
 import Network.Sendfile.Types
@@ -104,26 +106,27 @@ sendfileFd' dst src range hook = do
             poke offp 0
             -- System call is very slow. Use PartOfFile instead.
             len <- fileSize <$> getFdStatus src
-            let len' = fromIntegral len
-            sendfileloop dst src offp len' hook
+            sendfileloop dst src offp len hook
         PartOfFile off len -> do
             poke offp (fromIntegral off)
-            let len' = fromIntegral len
-            sendfileloop dst src offp len' hook
+            sendfileloop dst src offp (fromIntegral len) hook
 
-sendfileloop :: Fd -> Fd -> Ptr COff -> CSize -> IO () -> IO ()
+-- The remaining length is COff since CSize is 32-bit on 32-bit platforms.
+sendfileloop :: Fd -> Fd -> Ptr COff -> COff -> IO () -> IO ()
 sendfileloop dst src offp len hook = do
     -- Multicore IO manager use edge-trigger mode.
     -- So, calling threadWaitWrite only when errnor is eAGAIN.
     let toSend
-          | len > safeSize = safeSize
-          | otherwise      = len
+          | len > fromIntegral safeSize = safeSize
+          | otherwise                   = fromIntegral len
     bytes <- c_sendfile dst src offp toSend
     case bytes of
         -1 -> do
             errno <- getErrno
             if errno == eAGAIN then do
                 threadWaitWrite dst
+                sendfileloop dst src offp len hook
+              else if errno == eINTR then
                 sendfileloop dst src offp len hook
               else
                 throwErrno "Network.SendFile.Linux.sendfileloop"
@@ -134,7 +137,7 @@ sendfileloop dst src offp len hook = do
             when (left /= 0) $ sendfileloop dst src offp left hook
 
 -- Dst Src in order. take care
-foreign import ccall unsafe "sendfile"
+foreign import capi unsafe "sys/sendfile.h sendfile"
     c_sendfile :: Fd -> Fd -> Ptr COff -> CSize -> IO CSsize
 
 ----------------------------------------------------------------
@@ -143,9 +146,9 @@ foreign import ccall unsafe "sendfile"
 -- Simple binding for send() and sendfile() of Linux.
 -- Used system calls:
 --
---  - EntireFile -- send(), open(), stat(), sendfile(), and close()
+--  - EntireFile -- open(), send(), stat(), sendfile(), and close()
 --
---  - PartOfFile -- send(), open(), sendfile(), and close()
+--  - PartOfFile -- open(), send(), sendfile(), and close()
 --
 -- The fifth header is sent with send() + the MSG_MORE flag. If the
 -- file is small enough, the header and the file is send in a single
@@ -160,11 +163,11 @@ foreign import ccall unsafe "sendfile"
 -- is sent and before waiting the socket to be ready for writing.
 
 sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
-sendfileWithHeader sock path range hook hdr = do
-    checkRange range
-    -- Copying is much faster than syscall.
-    sendMsgMore sock $ B.concat hdr
-    sendfile sock path range hook
+sendfileWithHeader sock path range hook hdr = bracket setup teardown $ \fd ->
+    sendfileFdWithHeader sock fd range hook hdr
+  where
+    setup = openFd path ReadOnly defaultFileFlags{nonBlock=True}
+    teardown = closeFd
 
 -- |
 -- Simple binding for send() and sendfile() of Linux.
@@ -194,14 +197,8 @@ sendfileFdWithHeader sock fd range hook hdr = do
     sendfileFd sock fd range hook
 
 sendMsgMore :: Socket -> ByteString -> IO ()
-sendMsgMore sock bs = withForeignPtr fptr $ \ptr -> do
-  withFdSocket sock $ \fd -> do
-    let s = Fd fd
-    let buf = castPtr (ptr `plusPtr` off)
-        siz = fromIntegral len
-    sendloop s buf siz
-  where
-    PS fptr off len = bs
+sendMsgMore sock bs = unsafeUseAsCStringLen bs $ \(buf, len) ->
+    withFdSocket sock $ \fd -> sendloop (Fd fd) buf (fromIntegral len)
 
 sendloop :: Fd -> Ptr CChar -> CSize -> IO ()
 sendloop s buf len = do
@@ -210,6 +207,8 @@ sendloop s buf len = do
         errno <- getErrno
         if errno == eAGAIN then do
             threadWaitWrite s
+            sendloop s buf len
+          else if errno == eINTR then
             sendloop s buf len
           else
             throwErrno "Network.SendFile.Linux.sendloop"
