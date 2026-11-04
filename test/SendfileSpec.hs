@@ -45,6 +45,10 @@ spec = do
         -- not a right test.
         it "terminates even if the file is truncated" $ do
             shouldTerminate truncateFile
+        it "rejects a negative offset" $ do
+            sendRejected (PartOfFile (-1) 1000) `shouldReturn` ""
+        it "rejects a negative length" $ do
+            sendRejected (PartOfFile 2000 (-1)) `shouldReturn` ""
     describe "sendfileWithHeader" $ do
         it "sends an header and an entire file" $ do
             sendFileH EntireFile `shouldReturn` True
@@ -65,6 +69,10 @@ spec = do
         -- not a right test.
         it "terminates even if the file is truncated" $ do
             shouldTerminate truncateFileH
+        it "sends nothing for a negative offset" $ do
+            sendRejectedH (PartOfFile (-1) 1000) `shouldReturn` ""
+        it "sends nothing for a negative length" $ do
+            sendRejectedH (PartOfFile 2000 (-1)) `shouldReturn` ""
 #if !defined(linux_HOST_OS)
         -- Linux still sends the header before opening the file.
         it "sends nothing if the file does not exist" $ do
@@ -109,12 +117,8 @@ sendFileHLarge range = sendFileCore range headers
 sendFileCore :: FileRange -> [ByteString] -> IO Bool
 sendFileCore range headers = bracket setup teardown $ \(s2,_) -> do
     tr "reader:begin"
-#if MIN_VERSION_conduit(1,3,0)
     runResourceT $ runConduit (sourceSocket s2 .| sinkFile outputFile)
     tr "reader:eof"
-#else
-    runResourceT $ sourceSocket s2 $$ sinkFile outputFile
-#endif
     runResourceT $ copyfile range
     !f1 <- BL.readFile outputFile
     !f2 <- BL.readFile expectedFile
@@ -122,24 +126,13 @@ sendFileCore range headers = bracket setup teardown $ \(s2,_) -> do
   where
     copyfile EntireFile = do
         -- of course, we can use <> here
-#if MIN_VERSION_conduit(1,3,0)
         runConduit (sourceList headers .| sinkFile expectedFile)
         runConduit (sourceFile inputFile .| sinkAppendFile expectedFile)
-#else
-        sourceList headers $$ sinkFile expectedFile
-        sourceFile inputFile $$ sinkAppendFile expectedFile
-#endif
     copyfile (PartOfFile off len) = do
-#if MIN_VERSION_conduit(1,3,0)
         runConduit (sourceList headers .| sinkFile expectedFile)
         runConduit (sourceFile inputFile
                  .| CB.isolate (off' + len')
                  .| (CB.take off' >> sinkAppendFile expectedFile))
-#else
-        sourceList headers $$ sinkFile expectedFile
-        sourceFile inputFile $= CB.isolate (off' + len')
-                             $$ (CB.take off' >> sinkAppendFile expectedFile)
-#endif
       where
         off' = fromIntegral off
         len' = fromIntegral len
@@ -188,12 +181,8 @@ sendIllegalH range = sendIllegalCore range headers
 sendIllegalCore :: FileRange -> [ByteString] -> IO ()
 sendIllegalCore range headers = bracket setup teardown $ \(s2,_) -> do
     tr "reader:begin"
-#if MIN_VERSION_conduit(1,3,0)
     runResourceT $ runConduit (sourceSocket s2 .| sinkFile outputFile)
     tr "reader:eof"
-#else
-    runResourceT $ sourceSocket s2 $$ sinkFile outputFile
-#endif
     return ()
   where
     setup = do
@@ -223,17 +212,26 @@ sendIllegalCore range headers = bracket setup teardown $ \(s2,_) -> do
 
 -- Returns what the peer received after sendfileWithHeader failed.
 sendMissingH :: IO ByteString
-sendMissingH = bracket setup teardown $ \(s1,s2) -> do
-    r <- try $ sendfileWithHeader s1 "test/nonexistent" EntireFile (return ()) ["header"]
+sendMissingH = sendFailing $ \s ->
+    sendfileWithHeader s "test/nonexistent" EntireFile (return ()) ["header"]
+
+sendRejected :: FileRange -> IO ByteString
+sendRejected range = sendFailing $ \s ->
+    sendfile s "test/inputFile" range (return ())
+
+sendRejectedH :: FileRange -> IO ByteString
+sendRejectedH range = sendFailing $ \s ->
+    sendfileWithHeader s "test/inputFile" range (return ()) ["header"]
+
+-- Runs an action expected to throw and returns what the peer received.
+sendFailing :: (Socket -> IO ()) -> IO ByteString
+sendFailing act = bracket setup teardown $ \(s1,s2) -> do
+    r <- try $ act s1
     case r of
         Left (_ :: IOException) -> return ()
-        Right () -> expectationFailure "no exception for a missing file"
+        Right () -> expectationFailure "no exception"
     close s1
-#if MIN_VERSION_conduit(1,3,0)
     BS.concat <$> runConduit (sourceSocket s2 .| CL.consume)
-#else
-    BS.concat <$> (sourceSocket s2 $$ CL.consume)
-#endif
   where
     setup = socketPair AF_UNIX Stream 0
     teardown (_,s2) = close s2
@@ -258,20 +256,12 @@ truncateFileH = truncateFileCore headers
 truncateFileCore :: [ByteString] -> IO ()
 truncateFileCore headers = bracket setup teardown $ \(s2,_) -> do
     tr "reader:begin"
-#if MIN_VERSION_conduit(1,3,0)
     runResourceT $ runConduit (sourceSocket s2 .| sinkFile outputFile)
     tr "reader:eof"
-#else
-    runResourceT $ sourceSocket s2 $$ sinkFile outputFile
-#endif
     return ()
   where
     setup = do
-#if MIN_VERSION_conduit(1,3,0)
         runResourceT $ runConduit (sourceFile inputFile .| sinkFile tempFile)
-#else
-        runResourceT $ sourceFile inputFile $$ sinkFile tempFile
-#endif
         (s1,s2) <- socketPair AF_UNIX Stream 0
         ref <- newIORef (1 :: Int)
         tid <- forkIO (sf s1 ref `finally` sendEOF s1)
@@ -307,11 +297,7 @@ removeFileIfExists file = do
 
 sinkAppendFile :: MonadResource m
                   => FilePath
-#if MIN_VERSION_conduit(1,3,0)
                   -> ConduitT ByteString Void m ()
-#else
-                  -> Sink ByteString m ()
-#endif
 sinkAppendFile fp = sinkIOHandle (openBinaryFile fp AppendMode)
 
 ----------------------------------------------------------------
