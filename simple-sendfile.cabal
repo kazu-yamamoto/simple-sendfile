@@ -1,6 +1,6 @@
 cabal-version:      >=1.10
 name:               simple-sendfile
-version:            0.2.32
+version:            0.2.33
 license:            BSD3
 license-file:       LICENSE
 maintainer:         Kazu Yamamoto <kazu@iij.ad.jp>
@@ -14,7 +14,9 @@ description:
 category:           Network
 build-type:         Simple
 tested-with:        GHC == 9.2.8 || == 9.4.8 || == 9.6.7 || == 9.8.4 || == 9.10.3 || == 9.12.4 || == 9.14.1
-extra-source-files: test/inputFile
+extra-source-files:
+    ChangeLog.md
+    test/inputFile
 
 source-repository head
     type:     git
