@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         os:  [ 'windows-latest' ]
-        ghc: [ '9.4', '9.8', '9.12' ]
+        ghc: [ '9.8' ]
 
     steps:
     - run: git config --global core.autocrlf false
@@ -26,6 +26,20 @@ jobs:
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: 'latest'
+
+    - name: Build C repros
+      working-directory: repro
+      run: |
+        ghc -no-hs-main -O2 repro2.c -lws2_32 -o repro2-c.exe
+        ghc -no-hs-main -O2 repro3.c -lws2_32 -o repro3-c.exe
+        Get-CimInstance Win32_Processor | Select-Object Name, Architecture | Format-List
+
+    - name: Run C repros (native x64)
+      working-directory: repro
+      run: |
+        foreach ($s in 0, 1000) { .\repro2-c.exe 2000 $s; .\repro2-c.exe 2000 $s sendone }
+        foreach ($m in "blocking","event","iocp") { foreach ($s in 0, 1000) { .\repro3-c.exe 2000 $s unix $m; .\repro3-c.exe 2000 $s unix $m sendone } }
+        foreach ($m in "blocking","event","iocp") { foreach ($s in 0, 1000) { .\repro3-c.exe 1000 $s tcp $m; .\repro3-c.exe 1000 $s tcp $m sendone } }
 
     - name: Build repro
       working-directory: repro
