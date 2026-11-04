@@ -34,6 +34,10 @@ oneIter mode = do
                     _              -> error ("unknown mode: " ++ mode)
             _ <- forkIO sender
             timeout 2000000 (drain s2)
+    when (isNothing r) $ do
+        -- Probe: is EOF already visible at the OS level?
+        r2 <- timeout 1000000 (SB.recv s2 4096)
+        putStrLn ("  hang (" ++ mode ++ "): second recv = " ++ show r2)
     close s2
     return (isNothing r)
 
