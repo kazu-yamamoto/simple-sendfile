@@ -51,3 +51,20 @@ jobs:
       run: |
         cabal install doctest --overwrite-policy=always
         cabal repl --build-depends=QuickCheck --with-ghc=doctest
+
+  freebsd:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Build and test on FreeBSD
+      uses: vmactions/freebsd-vm@v1
+      with:
+        usesh: true
+        prepare: pkg install -y ghc hs-cabal-install
+        run: |
+          ghc --version
+          cabal --version
+          cabal update
+          cabal test --test-show-details=streaming
