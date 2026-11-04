@@ -64,14 +64,8 @@ sendfile sock path range hook = bracket setup teardown $ \fd ->
 sendfileFd :: Socket -> Fd -> FileRange -> IO () -> IO ()
 sendfileFd sock fd range hook = do
   checkRange range
-#if MIN_VERSION_network(3,1,0)
   withFdSocket sock $ \s -> do
     let dst = Fd s
-#elif MIN_VERSION_network(3,0,0)
-    dst <- Fd <$> fdSocket sock
-#else
-    let dst = Fd $ fdSocket sock
-#endif
     alloca $ \sentp -> case range of
         EntireFile -> sendloop dst fd 0 entire sentp hook
         -- 0 means the entire file for BSD sendfile(), so skip it.
@@ -140,14 +134,8 @@ sendfileWithHeader sock path range hook hdr =
 sendfileFdWithHeader :: Socket -> Fd -> FileRange -> IO () -> [ByteString] -> IO ()
 sendfileFdWithHeader sock fd range hook hdr = do
   checkRange range
-#if MIN_VERSION_network(3,1,0)
   withFdSocket sock $ \s -> do
     let dst = Fd s
-#elif MIN_VERSION_network(3,0,0)
-    dst <- Fd <$> fdSocket sock
-#else
-    let dst = Fd $ fdSocket sock
-#endif
     alloca $ \sentp ->
         if isEmptyPart then
             -- 0 means the entire file for BSD sendfile(), so skip it.
