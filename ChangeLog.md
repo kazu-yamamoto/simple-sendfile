@@ -16,3 +16,5 @@ GHC 9.2 or later is required.
   [#48](https://github.com/kazu-yamamoto/simple-sendfile/pull/48)
 * Document how FileRange is handled
   [#49](https://github.com/kazu-yamamoto/simple-sendfile/pull/49)
+* Add FreeBSD to CI and fix BSD error messages
+  [#50](https://github.com/kazu-yamamoto/simple-sendfile/pull/50)
