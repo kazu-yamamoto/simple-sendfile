@@ -154,20 +154,18 @@ sendfileFdWithHeader sock fd range hook hdr = do
                     EntireFile           -> (0,entire)
                     PartOfFile off' len' -> (fromInteger off'
                                             ,fromInteger len' + hlen)
-            mrc <- sendloopHeader dst fd off len sentp hdr hlen
+            mrc <- sendloopHeader dst fd off len sentp hdr hlen hook
             case mrc of
                 Nothing              -> return ()
-                Just (newoff,newlen) -> do
-                    threadWaitWrite dst
-                    sendloop dst fd newoff newlen sentp hook
+                Just (newoff,newlen) -> sendloop dst fd newoff newlen sentp hook
   where
     hlen = fromIntegral . sum . map BS.length $ hdr
     isEmptyPart = case range of
         PartOfFile _ len -> len <= 0
         EntireFile       -> False
 
-sendloopHeader :: Fd -> Fd -> COff -> COff -> Ptr COff -> [ByteString] -> COff -> IO (Maybe (COff, COff))
-sendloopHeader dst src off len sentp hdr hlen = do
+sendloopHeader :: Fd -> Fd -> COff -> COff -> Ptr COff -> [ByteString] -> COff -> IO () -> IO (Maybe (COff, COff))
+sendloopHeader dst src off len sentp hdr hlen hook = do
     rc <- withSfHdtr hdr $ sendFile src dst off len sentp
     if rc == 0 then
         return Nothing
@@ -175,23 +173,25 @@ sendloopHeader dst src off len sentp hdr hlen = do
         errno <- getErrno
         if errno `elem` [eAGAIN, eINTR] then do
             sent <- peek sentp
+            hook
+            -- Parallel IO manager use edge-trigger mode.
+            -- So, calling threadWaitWrite only when errnor is eAGAIN.
+            let wait = when (errno == eAGAIN) $ threadWaitWrite dst
             if sent >= hlen then do
                 let newoff = off + sent - hlen
                 if len == entire then
-                    return $ Just (newoff, entire)
+                    wait >> return (Just (newoff, entire))
                   else if len - sent <= 0 then
                     -- 0 means the entire file, so stop here.
                     return Nothing
                   else
-                    return $ Just (newoff, len - sent)
+                    wait >> return (Just (newoff, len - sent))
               else do
-                -- Parallel IO manager use edge-trigger mode.
-                -- So, calling threadWaitWrite only when errnor is eAGAIN.
-                when (errno == eAGAIN) $ threadWaitWrite dst
                 let newlen = if len == entire then entire else len - sent
                     newhdr = remainingChunks (fromIntegral sent) hdr
                     newhlen = hlen - sent
-                sendloopHeader dst src off newlen sentp newhdr newhlen
+                wait
+                sendloopHeader dst src off newlen sentp newhdr newhlen hook
           else
             throwErrno "Network.SendFile.MacOS.sendloopHeader"
 
