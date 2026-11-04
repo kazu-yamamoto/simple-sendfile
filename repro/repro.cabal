@@ -1,0 +1,16 @@
+cabal-version: 2.4
+name:          repro
+version:       0
+
+common deps
+    default-language: Haskell2010
+    build-depends:    base, bytestring, network
+
+executable repro-nt
+    import:      deps
+    main-is:     Main.hs
+
+executable repro-t
+    import:      deps
+    main-is:     Main.hs
+    ghc-options: -threaded

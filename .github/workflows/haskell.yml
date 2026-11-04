@@ -7,14 +7,14 @@ on:
     branches: [ 'main' ]
 
 jobs:
-  build:
+  repro:
     runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
-        os:  [ 'ubuntu-latest', 'macOS-latest', 'windows-latest' ]
-        ghc: [ '9.2', '9.4', '9.6', '9.8', '9.10', '9.12', '9.14' ]
+        os:  [ 'windows-latest' ]
+        ghc: [ '9.4', '9.8', '9.12' ]
 
     steps:
     - run: git config --global core.autocrlf false
@@ -27,27 +27,17 @@ jobs:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: 'latest'
 
-    - name: Cache
-      uses: actions/cache@v6
-      with:
-        path: ${{ steps.setup.outputs.cabal-store }}
-        key: ${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ matrix.ghc }}-
-
-    - name: Install dependencies
+    - name: Build repro
+      working-directory: repro
       run: |
         cabal update
-        cabal build --only-dependencies --enable-tests --disable-benchmarks
+        cabal build all
+        cabal list-bin repro-nt
 
-    - name: Build
-      run: cabal build --enable-tests --disable-benchmarks all
+    - name: Run repro (non-threaded)
+      working-directory: repro
+      run: cabal run -v0 repro-nt -- nt 300
 
-    - name: Run tests
-      run: cabal test --test-show-details=streaming
-
-    - name: Run doctest
-      if: ${{ runner.os == 'Linux' }}
-      run: |
-        cabal install doctest --overwrite-policy=always
-        cabal repl --build-depends=QuickCheck --with-ghc=doctest
+    - name: Run repro (threaded)
+      working-directory: repro
+      run: cabal run -v0 repro-t -- threaded 300
