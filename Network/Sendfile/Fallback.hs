@@ -18,8 +18,9 @@ import System.IO (Handle, IOMode(ReadMode), withBinaryFile)
 --  - Used system calls: open(), stat(), read(), send() and close().
 
 sendfile :: Socket -> FilePath -> FileRange -> IO () -> IO ()
-sendfile sock path range hook = withBinaryFile path ReadMode $ \h ->
-    sendHandle sock h range hook
+sendfile sock path range hook = do
+    checkRange range
+    withBinaryFile path ReadMode $ \h -> sendHandle sock h range hook
 
 -- |
 -- Sendfile emulation using conduit.
@@ -30,9 +31,11 @@ sendfile sock path range hook = withBinaryFile path ReadMode $ \h ->
 -- if the file cannot be opened.
 
 sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
-sendfileWithHeader sock path range hook hdr = withBinaryFile path ReadMode $ \h -> do
-    SB.sendMany sock hdr
-    sendHandle sock h range hook
+sendfileWithHeader sock path range hook hdr = do
+    checkRange range
+    withBinaryFile path ReadMode $ \h -> do
+        SB.sendMany sock hdr
+        sendHandle sock h range hook
 
 sendHandle :: Socket -> Handle -> FileRange -> IO () -> IO ()
 sendHandle sock h range hook = runConduit $ source .| sinkSocket sock hook

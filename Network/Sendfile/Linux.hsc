@@ -104,8 +104,9 @@ sendfileFd sock fd range hook = do
     sendfileFd' dst fd range hook
 
 sendfileFd' :: Fd -> Fd -> FileRange -> IO () -> IO ()
-sendfileFd' dst src range hook =
-    alloca $ \offp -> case range of
+sendfileFd' dst src range hook = do
+  checkRange range
+  alloca $ \offp -> case range of
         EntireFile -> do
             poke offp 0
             -- System call is very slow. Use PartOfFile instead.
@@ -167,6 +168,7 @@ foreign import ccall unsafe "sendfile"
 
 sendfileWithHeader :: Socket -> FilePath -> FileRange -> IO () -> [ByteString] -> IO ()
 sendfileWithHeader sock path range hook hdr = do
+    checkRange range
     -- Copying is much faster than syscall.
     sendMsgMore sock $ B.concat hdr
     sendfile sock path range hook
@@ -193,6 +195,7 @@ sendfileWithHeader sock path range hook hdr = do
 
 sendfileFdWithHeader :: Socket -> Fd -> FileRange -> IO () -> [ByteString] -> IO ()
 sendfileFdWithHeader sock fd range hook hdr = do
+    checkRange range
     -- Copying is much faster than syscall.
     sendMsgMore sock $ B.concat hdr
     sendfileFd sock fd range hook

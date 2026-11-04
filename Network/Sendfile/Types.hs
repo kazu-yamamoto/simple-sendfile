@@ -2,6 +2,8 @@
 
 module Network.Sendfile.Types where
 
+import GHC.IO.Exception (IOErrorType(InvalidArgument), IOException(..))
+
 #ifdef VERSION_unix
 import qualified Data.ByteString as B
 
@@ -18,6 +20,13 @@ data FileRange = EntireFile
                    rangeOffset :: Integer
                  , rangeLength :: Integer
                  }
+
+-- | Throws 'InvalidArgument' if the offset or the length is negative.
+checkRange :: FileRange -> IO ()
+checkRange (PartOfFile off len)
+  | off < 0 || len < 0 = ioError $ IOError Nothing InvalidArgument
+        "Network.Sendfile" "negative offset or length" Nothing Nothing
+checkRange _ = return ()
 
 -- To avoid build error in windows
 #ifdef VERSION_unix

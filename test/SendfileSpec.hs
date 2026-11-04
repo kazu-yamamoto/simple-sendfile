@@ -45,6 +45,10 @@ spec = do
         -- not a right test.
         it "terminates even if the file is truncated" $ do
             shouldTerminate truncateFile
+        it "rejects a negative offset" $ do
+            sendRejected (PartOfFile (-1) 1000) `shouldReturn` ""
+        it "rejects a negative length" $ do
+            sendRejected (PartOfFile 2000 (-1)) `shouldReturn` ""
     describe "sendfileWithHeader" $ do
         it "sends an header and an entire file" $ do
             sendFileH EntireFile `shouldReturn` True
@@ -65,6 +69,10 @@ spec = do
         -- not a right test.
         it "terminates even if the file is truncated" $ do
             shouldTerminate truncateFileH
+        it "sends nothing for a negative offset" $ do
+            sendRejectedH (PartOfFile (-1) 1000) `shouldReturn` ""
+        it "sends nothing for a negative length" $ do
+            sendRejectedH (PartOfFile 2000 (-1)) `shouldReturn` ""
 #if !defined(linux_HOST_OS)
         -- Linux still sends the header before opening the file.
         it "sends nothing if the file does not exist" $ do
@@ -223,11 +231,24 @@ sendIllegalCore range headers = bracket setup teardown $ \(s2,_) -> do
 
 -- Returns what the peer received after sendfileWithHeader failed.
 sendMissingH :: IO ByteString
-sendMissingH = bracket setup teardown $ \(s1,s2) -> do
-    r <- try $ sendfileWithHeader s1 "test/nonexistent" EntireFile (return ()) ["header"]
+sendMissingH = sendFailing $ \s ->
+    sendfileWithHeader s "test/nonexistent" EntireFile (return ()) ["header"]
+
+sendRejected :: FileRange -> IO ByteString
+sendRejected range = sendFailing $ \s ->
+    sendfile s "test/inputFile" range (return ())
+
+sendRejectedH :: FileRange -> IO ByteString
+sendRejectedH range = sendFailing $ \s ->
+    sendfileWithHeader s "test/inputFile" range (return ()) ["header"]
+
+-- Runs an action expected to throw and returns what the peer received.
+sendFailing :: (Socket -> IO ()) -> IO ByteString
+sendFailing act = bracket setup teardown $ \(s1,s2) -> do
+    r <- try $ act s1
     case r of
         Left (_ :: IOException) -> return ()
-        Right () -> expectationFailure "no exception for a missing file"
+        Right () -> expectationFailure "no exception"
     close s1
 #if MIN_VERSION_conduit(1,3,0)
     BS.concat <$> runConduit (sourceSocket s2 .| CL.consume)
