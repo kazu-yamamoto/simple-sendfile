@@ -33,6 +33,8 @@ spec = do
             sendFile EntireFile `shouldReturn` True
         it "sends a part of file" $ do
             sendFile (PartOfFile 2000 1000000) `shouldReturn` True
+        it "sends nothing for a zero-length part" $ do
+            sendFile (PartOfFile 2000 0) `shouldReturn` True
         it "terminates even if length is over" $ do
             shouldTerminate $ sendIllegal (PartOfFile 2000 5000000)
         it "terminates even if offset is over" $ do
@@ -47,6 +49,8 @@ spec = do
             sendFileH EntireFile `shouldReturn` True
         it "sends an header and a part of file" $ do
             sendFileH (PartOfFile 2000 1000000) `shouldReturn` True
+        it "sends only an header for a zero-length part" $ do
+            sendFileH (PartOfFile 2000 0) `shouldReturn` True
         it "sends a large header and an entire file" $ do
             sendFileHLarge EntireFile `shouldReturn` True
         it "sends a large header and a part of file" $ do
