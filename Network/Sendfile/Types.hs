@@ -14,6 +14,16 @@ import qualified System.Posix.Types         as P
 
 -- |
 --  File range for 'sendfile'.
+--
+--  * If the offset or the length of 'PartOfFile' is negative, an
+--    'IOException' of 'InvalidArgument' is thrown before anything is sent.
+--
+--  * If the length is 0, nothing is sent (only the header for the
+--    @WithHeader@ variants).
+--
+--  * If the file is shorter than the range, or is truncated while
+--    being sent, sending stops at the end of the file without any
+--    error. So, the number of bytes sent may be less than requested.
 
 data FileRange = EntireFile
                | PartOfFile {
