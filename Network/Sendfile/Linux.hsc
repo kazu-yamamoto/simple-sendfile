@@ -129,7 +129,7 @@ sendfileloop dst src offp len hook = do
               else if errno == eINTR then
                 sendfileloop dst src offp len hook
               else
-                throwErrno "Network.SendFile.Linux.sendfileloop"
+                throwErrno "Network.Sendfile.Linux.sendfileloop"
         0  -> return () -- the file is truncated
         _  -> do
             hook
@@ -211,7 +211,7 @@ sendloop s buf len = do
           else if errno == eINTR then
             sendloop s buf len
           else
-            throwErrno "Network.SendFile.Linux.sendloop"
+            throwErrno "Network.Sendfile.Linux.sendloop"
       else do
         let sent = fromIntegral bytes
         when (sent /= len) $ do
