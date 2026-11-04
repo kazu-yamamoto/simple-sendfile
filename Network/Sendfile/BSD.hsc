@@ -90,7 +90,7 @@ sendloop dst src off len sentp hook = do
                 when (errno == eAGAIN) $ threadWaitWrite dst
                 sendloop dst src newoff newlen sentp hook
           else
-            throwErrno "Network.SendFile.MacOS.sendloop"
+            throwErrno "Network.Sendfile.BSD.sendloop"
 
 ----------------------------------------------------------------
 
@@ -193,7 +193,7 @@ sendloopHeader dst src off len sentp hdr hlen hook = do
                 wait
                 sendloopHeader dst src off newlen sentp newhdr newhlen hook
           else
-            throwErrno "Network.SendFile.MacOS.sendloopHeader"
+            throwErrno "Network.Sendfile.BSD.sendloopHeader"
 
 ----------------------------------------------------------------
 
