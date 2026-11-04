@@ -64,10 +64,8 @@ library
             else
                 other-modules: Network.Sendfile.Fallback
                 build-depends:
-                    conduit >=1.0 && <1.4,
-                    conduit-extra >=1.0 && <1.4,
-                    transformers >=0.2.2 && <0.7,
-                    resourcet
+                    conduit >=1.3 && <1.4,
+                    conduit-extra >=1.3 && <1.4
 
 test-suite spec
     type:               exitcode-stdio-1.0

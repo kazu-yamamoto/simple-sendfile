@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module SendfileSpec where
 
@@ -64,6 +65,11 @@ spec = do
         -- not a right test.
         it "terminates even if the file is truncated" $ do
             shouldTerminate truncateFileH
+#if !defined(linux_HOST_OS)
+        -- Linux still sends the header before opening the file.
+        it "sends nothing if the file does not exist" $ do
+            sendMissingH `shouldReturn` ""
+#endif
   where
     fiveSecs = 5000000
     shouldTerminate body = do
@@ -212,6 +218,25 @@ sendIllegalCore range headers = bracket setup teardown $ \(s2,_) -> do
         removeFileIfExists outputFile
     inputFile  = "test/inputFile"
     outputFile = "test/outputFile"
+
+----------------------------------------------------------------
+
+-- Returns what the peer received after sendfileWithHeader failed.
+sendMissingH :: IO ByteString
+sendMissingH = bracket setup teardown $ \(s1,s2) -> do
+    r <- try $ sendfileWithHeader s1 "test/nonexistent" EntireFile (return ()) ["header"]
+    case r of
+        Left (_ :: IOException) -> return ()
+        Right () -> expectationFailure "no exception for a missing file"
+    close s1
+#if MIN_VERSION_conduit(1,3,0)
+    BS.concat <$> runConduit (sourceSocket s2 .| CL.consume)
+#else
+    BS.concat <$> (sourceSocket s2 $$ CL.consume)
+#endif
+  where
+    setup = socketPair AF_UNIX Stream 0
+    teardown (_,s2) = close s2
 
 ----------------------------------------------------------------
 
